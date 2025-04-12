@@ -4,7 +4,7 @@
 #include <RtcDS1302.h>
 #include <relay.h>
 #include <Alarm.h>
-//#include <Preferences.h>
+
 #include <EEPROM.h>
 #include "Display.h"
 #include <WiFi.h>
@@ -12,7 +12,6 @@
 #include <WebServer.h>
 #include <pushover.h>
 #include <Firebase.h>
-//#include <ESPmDNS.h>
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  10        /* Time ESP32 will go to sleep (in seconds) */
@@ -109,24 +108,6 @@ int measurePressure() {
 	//printMessage(myString, 0, 38);
 	//delay(100); 
 }
-
-// IPAddress performMDNSLookup(const char* hostname) {
-//     Serial.print("Looking up mDNS hostname: ");
-//     Serial.println(hostname);
-
-//     // Perform mDNS query
-//     IPAddress ip = MDNS.queryHost(hostname);
-//     if (ip) {
-//         Serial.print("Resolved IP: ");
-//         Serial.println(ip);
-//         return ip;
-//     } else {
-//         Serial.println("Failed to resolve hostname");
-//         return IPAddress(0, 0, 0, 0); // Return an invalid IP address
-//     }
-// }
-
-
 
 void knobCallback(long value) {
     lastInteractionTime = millis(); // Reset the last interaction time on knob turn    
