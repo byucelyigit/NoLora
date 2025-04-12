@@ -370,6 +370,28 @@ void writeAlarmsToFirebase() {
     }
 }
 
+void updateRelaysFromFirebase() {
+    static unsigned long lastFirebaseCheck = 0;
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastFirebaseCheck >= 3000) { // Check every 3 seconds
+        lastFirebaseCheck = currentMillis;
+
+        int relayStatus = fb.getInt("relays/status");
+        if (relayStatus >= 0) { // Ensure a valid value is retrieved
+            for (int i = 0; i < RELAY_COUNT; i++) {
+                if (relayStatus & (1 << i)) { // Check if the bit is set
+                    relay[i].TurnOn();
+                } else {
+                    relay[i].TurnOff();
+                }
+            }
+        } else {
+            Serial.println("Failed to read relay status from Firebase.");
+        }
+    }
+}
+
 void setup(){
 	Serial.begin(115200);
 
@@ -734,5 +756,6 @@ void loop() {
         Serial.println("RTC lost confidence in the DateTime!");
     }
 
+    updateRelaysFromFirebase();
     server.handleClient();
 }
