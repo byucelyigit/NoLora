@@ -1,6 +1,7 @@
 #include "relay.h"
 #include <Arduino.h>
 
+
 Relay::Relay(int _relayNo, int _pinNo)
 {
     //kodun bu kısmında serial print kullandığımda kod çöktü. O yüzden ilgili kısımları kalıcı olarak kaldırdım.

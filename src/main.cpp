@@ -371,12 +371,12 @@ void writeAlarmsToFirebase() {
 }
 
 void updateRelaysFromFirebase() {
+    //only in stopped state, if the relay is running, it will not be updated from firebase.
     static unsigned long lastFirebaseCheck = 0;
     unsigned long currentMillis = millis();
 
     if (currentMillis - lastFirebaseCheck >= 3000) { // Check every 3 seconds
         lastFirebaseCheck = currentMillis;
-
         int relayStatus = fb.getInt("relays/status");
         if (relayStatus >= 0) { // Ensure a valid value is retrieved
             for (int i = 0; i < RELAY_COUNT; i++) {

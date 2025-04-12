@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relay Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f9;
+        }
+        h1 {
+            color: #333;
+        }
+        .relay-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #fff;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button.active {
+            background-color: #ffc107 !important; /* Add !important to override conflicting styles */
+            color: #000 !important; /* Add !important for text color */
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Relay Control Panel</h1>
+    <div class="relay-container">
+        <button id="relay-0">Relay 1</button>
+        <button id="relay-1">Relay 2</button>
+        <button id="relay-2">Relay 3</button>
+        <button id="relay-3">Relay 4</button>
+        <button id="relay-4">Relay 5</button>
+        <button id="relay-5">Relay 6</button>
+        <button id="relay-6">Relay 7</button>
+        <button id="relay-7">Relay 8</button>
+    </div>
+
+    <script>
+        const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app";
+
+        // Fetch the current relay status
+        function fetchRelayStatus() {
+            fetch(`${firebaseUrl}/relays/status.json`) // Ensure '.json' is appended to the path
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(status => {
+                    updateRelayButtons(status);
+                })
+                .catch(error => {
+                    console.error("Failed to fetch relay status:", error);
+                });
+        }
+
+        // Update button states based on the relay status
+        function updateRelayButtons(status) {
+            for (let i = 0; i < 8; i++) {
+                const button = document.getElementById(`relay-${i}`);
+                if (status & (1 << i)) {
+                    button.classList.add("active"); // Ensure the 'active' class is added
+                } else {
+                    button.classList.remove("active"); // Ensure the 'active' class is removed
+                }
+            }
+        }
+
+        // Toggle a relay and update the status in Firebase
+        function toggleRelay(index) {
+            fetch(`${firebaseUrl}/relays/status.json`) // Ensure '.json' is appended to the path
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(status => {
+                    const newStatus = status ^ (1 << index); // Toggle only the bit for the selected relay
+                    return fetch(`${firebaseUrl}/relays/status.json`, { // Ensure '.json' is appended to the path
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(newStatus)
+                    });
+                })
+                .then(() => {
+                    fetchRelayStatus(); // Refresh the button states
+                })
+                .catch(error => {
+                    console.error("Failed to toggle relay:", error);
+                });
+        }
+
+        // Attach event listeners to buttons
+        for (let i = 0; i < 8; i++) {
+            document.getElementById(`relay-${i}`).addEventListener("click", () => toggleRelay(i));
+        }
+
+        // Initial fetch of relay status
+        fetchRelayStatus();
+    </script>
+</body>
+</html>
