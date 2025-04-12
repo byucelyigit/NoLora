@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alarm Parameters</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f9;
+        }
+        table {
+            border-collapse: collapse;
+            width: 90%;
+            max-width: 1200px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        #pressureGraph {
+            width: 90%;
+            max-width: 1200px;
+            height: 300px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h1>Task List</h1>
+        <p id="systemTime">Loading system time...</p>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Alarm No</th>
+                <th>Status</th>
+                <th>Frequency</th>
+                <th>Start Time</th>
+                <th>Run Minutes</th>
+                <th>Idle Minutes</th>
+                <th>Repeat Count</th>
+                <th>Remaining Repeat Count</th> <!-- New column -->
+                <th>Remaining Run Time</th> <!-- New column -->
+                <th>Remaining Idle Time</th> <!-- New column -->
+                <th>Last Run Date</th>
+                <th>Relay No</th>
+            </tr>
+        </thead>
+        <tbody id="alarmTableBody">
+            <!-- Rows will be dynamically populated -->
+        </tbody>
+    </table>
+
+    <div id="pressureGraph"></div>
+
+    <script>
+        async function fetchSystemTime() {
+            try {
+                const response = await fetch(`http://192.168.2.80/rtc`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch system time: ${response.statusText}`);
+                }
+                const systemTime = await response.text();
+                document.getElementById("systemTime").textContent = `System Time: ${systemTime}`;
+            } catch (error) {
+                console.error("Error fetching system time:", error);
+                document.getElementById("systemTime").textContent = "Failed to load system time.";
+            }
+        }
+
+        async function fetchAlarmData() {
+            const tableBody = document.getElementById("alarmTableBody");
+            tableBody.innerHTML = ""; // Clear existing rows
+
+            for (let alarmNo = 0; alarmNo < 8; alarmNo++) {
+                try {
+                    const response = await fetch(`http://192.168.2.80/alarm?alarmNo=${alarmNo}`);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch alarm ${alarmNo}: ${response.statusText}`);
+                    }
+                    const alarm = await response.json();
+
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${alarm.alarmno + 1}</td>
+                        <td>${mapStatus(alarm.alarm_status)}</td>
+                        <td>${mapFrequency(alarm.day_period)}</td>
+                        <td>${formatTime(alarm.alarm_hour, alarm.alarm_minute)}</td>
+                        <td>${alarm.run_minutes}</td>
+                        <td>${alarm.idle_minutes}</td>
+                        <td>${alarm.repeat_count}</td>
+                        <td>${alarm.repeat_count_remaining}</td> <!-- New data -->
+                        <td>${alarm.run_remaining_minutes} min</td> <!-- New data -->
+                        <td>${alarm.idle_remaining_minutes} min</td> <!-- New data -->
+                        <td>${formatDate(alarm.last_run_day, alarm.last_run_month, alarm.last_run_year)}</td>
+                        <td>${alarm.relay_no}</td>
+                    `;
+                    row.addEventListener("click", () => {
+                        window.location.href = `edit_alarm.html?alarmNo=${alarm.alarmno}&relayNo=${alarm.relay_no}`;
+                    });
+                    tableBody.appendChild(row);
+                } catch (error) {
+                    console.error(`Error fetching alarm ${alarmNo}:`, error);
+                }
+            }
+        }
+
+        function mapStatus(status) {
+            switch (status) {
+                case 0: return "Stopped";
+                case 1: return "Running";
+                case 2: return "Waiting";
+                default: return "Unknown";
+            }
+        }
+
+        function mapFrequency(dayPeriod) {
+            switch (dayPeriod) {
+                case 0: return "Off";
+                case 1: return "Everyday";
+                case 2: return "Day After";
+                case 3: return "Two Days After";
+                default: return `${dayPeriod} Days`;
+            }
+        }
+
+        function formatTime(hour, minute) {
+            return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        }
+
+        function formatDate(day, month, year) {
+            return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+        }
+
+        const pressureData = []; // Store the latest 20 averagePressure values
+
+        async function fetchAveragePressure() {
+            try {
+                const response = await fetch(`http://192.168.2.80/pressure`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch average pressure: ${response.statusText}`);
+                }
+                const pressure = parseInt(await response.text(), 10);
+                if (!isNaN(pressure)) {
+                    if (pressureData.length >= 20) {
+                        pressureData.shift(); // Remove the oldest value
+                    }
+                    pressureData.push(pressure);
+                    drawPressureGraph();
+                }
+            } catch (error) {
+                console.error("Error fetching average pressure:", error);
+            }
+        }
+
+        function drawPressureGraph() {
+            const graph = document.getElementById("pressureGraph");
+            graph.innerHTML = ""; // Clear the graph
+
+            const maxPressure = 300; // Maximum pressure value
+            const graphWidth = graph.clientWidth;
+            const graphHeight = graph.clientHeight;
+            const barWidth = graphWidth / 20;
+
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("width", graphWidth);
+            svg.setAttribute("height", graphHeight);
+
+            pressureData.forEach((pressure, index) => {
+                const barHeight = (pressure / maxPressure) * graphHeight;
+                const rect = document.createElementNS(svgNS, "rect");
+                rect.setAttribute("x", index * barWidth);
+                rect.setAttribute("y", graphHeight - barHeight);
+                rect.setAttribute("width", barWidth - 2); // Add spacing between bars
+                rect.setAttribute("height", barHeight);
+                rect.setAttribute("fill", "#007BFF");
+                svg.appendChild(rect);
+
+                // Add label for the latest reading
+                if (index === pressureData.length - 1) {
+                    const text = document.createElementNS(svgNS, "text");
+                    text.setAttribute("x", index * barWidth + barWidth / 2);
+                    text.setAttribute("y", graphHeight - barHeight - 5);
+                    text.setAttribute("fill", "#333");
+                    text.setAttribute("font-size", "12");
+                    text.setAttribute("text-anchor", "middle");
+                    text.textContent = pressure;
+                    svg.appendChild(text);
+                }
+            });
+
+            graph.appendChild(svg);
+        }
+
+        // Fetch average pressure every 3 seconds
+        setInterval(fetchAveragePressure, 3000);
+
+        // Fetch system time and alarm data on page load
+        window.onload = () => {
+            fetchSystemTime();
+            fetchAlarmData();
+        };
+    </script>
+</body>
+</html>

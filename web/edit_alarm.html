@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Alarm</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        form {
+            max-width: 600px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <form id="editAlarmForm">
+        <h1>Edit Alarm</h1>
+        <input type="hidden" id="alarmNo">
+        <label for="status">Status</label>
+        <select id="status">
+            <option value="0">Stopped</option>
+            <option value="1">Running</option>
+            <option value="2">Waiting</option>
+        </select>
+        <label for="frequency">Frequency</label>
+        <select id="frequency">
+            <option value="0">Off</option>
+            <option value="1">Everyday</option>
+            <option value="2">Day After</option>
+            <option value="3">Two Days After</option>
+        </select>
+        <label for="startTime">Start Time</label>
+        <input type="time" id="startTime">
+        <label for="runMinutes">Run Minutes</label>
+        <input type="number" id="runMinutes" min="0">
+        <label for="idleMinutes">Idle Minutes</label>
+        <input type="number" id="idleMinutes" min="0">
+        <label for="repeatCount">Repeat Count</label>
+        <input type="number" id="repeatCount" min="0">
+        <label for="relayNo">Relay No</label>
+        <input type="number" id="relayNo" min="0">
+        <button type="button" id="saveButton">Save</button>
+        <button type="button" id="cancelButton">Cancel</button>
+    </form>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const alarmNo = urlParams.get("alarmNo");
+        const form = document.getElementById("editAlarmForm");
+
+        async function loadAlarmData() {
+            if (!alarmNo) {
+                alert("Invalid alarm number.");
+                window.location.href = "alarms.html";
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://192.168.2.80/alarm?alarmNo=${alarmNo}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch alarm ${alarmNo}: ${response.statusText}`);
+                }
+                const alarm = await response.json();
+                document.getElementById("alarmNo").value = alarm.alarmno;
+                document.getElementById("status").value = alarm.alarm_status;
+                document.getElementById("frequency").value = alarm.day_period;
+                document.getElementById("startTime").value = `${alarm.alarm_hour.toString().padStart(2, '0')}:${alarm.alarm_minute.toString().padStart(2, '0')}`;
+                document.getElementById("runMinutes").value = alarm.run_minutes;
+                document.getElementById("idleMinutes").value = alarm.idle_minutes;
+                document.getElementById("repeatCount").value = alarm.repeat_count;
+                document.getElementById("relayNo").value = alarm.relay_no;
+            } catch (error) {
+                console.error("Error loading alarm data:", error);
+                alert("Failed to load alarm data. Please try again.");
+                window.location.href = "alarms.html";
+            }
+        }
+
+        document.getElementById("saveButton").addEventListener("click", async () => {
+            const alarmNo = document.getElementById("alarmNo").value;
+            const status = document.getElementById("status").value;
+            const frequency = document.getElementById("frequency").value;
+            const startTime = document.getElementById("startTime").value;
+            const runMinutes = document.getElementById("runMinutes").value;
+            const idleMinutes = document.getElementById("idleMinutes").value;
+            const repeatCount = document.getElementById("repeatCount").value;
+            const relayNo = document.getElementById("relayNo").value;
+
+            if (!startTime) {
+                alert("Start time is required.");
+                return;
+            }
+
+            const [hour, minute] = startTime.split(":");
+
+            try {
+                await Promise.all([
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=13&paramValue=${status}`), // Alarm Status
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=6&paramValue=${frequency}`), // Day Period
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=1&paramValue=${hour}`), // Alarm Hour
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=2&paramValue=${minute}`), // Alarm Minute
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=4&paramValue=${runMinutes}`), // Run Minutes
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=5&paramValue=${idleMinutes}`), // Idle Minutes
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=3&paramValue=${repeatCount}`), // Repeat Count
+                    fetch(`http://192.168.2.80/setAlarm?alarmNo=${alarmNo}&paramNo=7&paramValue=${relayNo}`) // Relay No
+                ]);
+                alert("Alarm updated successfully!");
+                window.location.href = "alarms.html";
+            } catch (error) {
+                console.error("Error saving alarm data:", error);
+                alert("Failed to save alarm data. Please try again.");
+            }
+        });
+
+        document.getElementById("cancelButton").addEventListener("click", () => {
+            window.location.href = "alarms.html";
+        });
+
+        loadAlarmData();
+    </script>
+</body>
+</html>

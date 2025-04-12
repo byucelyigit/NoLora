@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Alarm Parameters</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f9;
+        }
+        table {
+            border-collapse: collapse;
+            width: 90%;
+            max-width: 1200px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr>
+                <th>Alarm No</th>
+                <th>Status</th>
+                <th>Frequency</th>
+                <th>Start Time</th>
+                <th>Run Minutes</th>
+                <th>Idle Minutes</th>
+                <th>Repeat Count</th>
+            </tr>
+        </thead>
+        <tbody id="alarmTableBody">
+            <!-- Rows will be dynamically populated -->
+        </tbody>
+    </table>
+
+    <script>
+        const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Alarms.json";
+
+        async function fetchAlarmData() {
+            const tableBody = document.getElementById("alarmTableBody");
+            tableBody.innerHTML = ""; // Clear existing rows
+
+            try {
+                const response = await fetch(firebaseUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch alarms: ${response.statusText}`);
+                }
+                const alarms = await response.json();
+
+                for (const [alarmNo, alarm] of Object.entries(alarms)) {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${alarmNo}</td>
+                        <td>${mapStatus(alarm.alarm_status)}</td>
+                        <td>${mapFrequency(alarm.day_period)}</td>
+                        <td>${formatTime(alarm.alarm_hour, alarm.alarm_minute)}</td>
+                        <td>${alarm.run_minutes}</td>
+                        <td>${alarm.idle_minutes}</td>
+                        <td>${alarm.repeat_count}</td>
+                    `;
+                    row.addEventListener("click", () => {
+                        window.location.href = `edit_alarm.html?alarmNo=${alarmNo}`;
+                    });
+                    tableBody.appendChild(row);
+                }
+            } catch (error) {
+                console.error("Error fetching alarms:", error);
+            }
+        }
+
+        function mapStatus(status) {
+            switch (status) {
+                case 0: return "Stopped";
+                case 1: return "Running";
+                case 2: return "Waiting";
+                default: return "Unknown";
+            }
+        }
+
+        function mapFrequency(dayPeriod) {
+            switch (dayPeriod) {
+                case 0: return "Off";
+                case 1: return "Everyday";
+                case 2: return "Day After";
+                case 3: return "Two Days After";
+                default: return `${dayPeriod} Days`;
+            }
+        }
+
+        function formatTime(hour, minute) {
+            return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        }
+
+        // Fetch alarm data on page load
+        window.onload = fetchAlarmData;
+    </script>
+</body>
+</html>
