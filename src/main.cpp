@@ -207,6 +207,32 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
     }
 }
 
+void onRelayStateChange(int relayNo, bool isOn) {
+    String state = isOn ? "ON" : "OFF";
+    Serial.println("Relay " + String(relayNo) + " turned " + state);
+
+    // Example: Log relay state change to Firebase
+    String logPath = "RelayLogs/Relay" + String(relayNo) + "/Log";
+    String timestamp = String(Rtc.GetDateTime().Year()) + "-" +
+                       String(Rtc.GetDateTime().Month()) + "-" +
+                       String(Rtc.GetDateTime().Day()) + " " +
+                       String(Rtc.GetDateTime().Hour()) + ":" +
+                       String(Rtc.GetDateTime().Minute()) + ":" +
+                       String(Rtc.GetDateTime().Second());
+    String logMessage = "[" + timestamp + "] Relay " + String(relayNo) + " turned " + state;
+    fb.pushString(logPath, logMessage);
+    Serial.println("Logged to Firebase: " + logMessage);
+
+    // Update Firebase relays/status value
+    int relayStatus = 0;
+    if (isOn) {
+        relayStatus |= (1 << (relayNo - 1)); // Set the bit for the relay
+    } else {
+        relayStatus &= ~(1 << (relayNo - 1)); // Clear the bit for the relay
+    }
+    fb.setInt("relays/status", relayStatus);
+}
+
 void handleAlarmJson() {
     if (server.hasArg("alarmNo")) {
         int alarmNo = server.arg("alarmNo").toInt();
@@ -371,7 +397,7 @@ void writeAlarmsToFirebase() {
 }
 
 void updateRelaysFromFirebase() {
-    //only in stopped state, if the relay is running, it will not be updated from firebase.
+    
     static unsigned long lastFirebaseCheck = 0;
     unsigned long currentMillis = millis();
 
@@ -508,6 +534,10 @@ void setup(){
     for(int i = 0; i < 8; i++) {
         alrm[i].initAlarms(eprom);
         alrm[i].SetStatusChangeCallback(onAlarmStatusChange);
+    }
+
+    for (int i = 0; i < RELAY_COUNT; i++) {
+        relay[i].SetStateChangeCallback(onRelayStateChange);
     }
 
   	u8g2.begin();

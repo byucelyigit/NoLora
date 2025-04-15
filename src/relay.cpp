@@ -1,6 +1,7 @@
 #include "relay.h"
 #include <Arduino.h>
 
+void (*stateChangeCallback)(int, bool) = nullptr;
 
 Relay::Relay(int _relayNo, int _pinNo)
 {
@@ -12,14 +13,24 @@ Relay::Relay(int _relayNo, int _pinNo)
   digitalWrite(pin, LOW);
 }
 
+void Relay::SetStateChangeCallback(void (*callback)(int, bool)) {
+    stateChangeCallback = callback;
+}
+
 void Relay::TurnOn()
 {
   digitalWrite(pin, LOW);
   status = RELAY_ON;
+  if (stateChangeCallback) {
+      stateChangeCallback(relayNo, true);
+  }
 }
 
 void Relay::TurnOff()
 {
   digitalWrite(pin, HIGH);
   status = RELAY_OFF;
+  if (stateChangeCallback) {
+      stateChangeCallback(relayNo, false);
+  }
 }
