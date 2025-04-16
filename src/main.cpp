@@ -18,7 +18,7 @@
 #define RELAY_COUNT 4
 #define PARAMETER_COUNT 13  
 #define ALARM_COUNT 8
-
+#define CHECK_PRESSURE_LIMIT false
 
 
 
@@ -226,9 +226,9 @@ void onRelayStateChange(int relayNo, bool isOn) {
     // Update Firebase relays/status value
     int relayStatus = 0;
     if (isOn) {
-        relayStatus |= (1 << (relayNo - 1)); // Set the bit for the relay
+        relayStatus |= (1 << (relayNo)); // Set the bit for the relay
     } else {
-        relayStatus &= ~(1 << (relayNo - 1)); // Clear the bit for the relay
+        relayStatus &= ~(1 << (relayNo)); // Clear the bit for the relay
     }
     fb.setInt("relays/status", relayStatus);
 }
@@ -397,24 +397,35 @@ void writeAlarmsToFirebase() {
 }
 
 void updateRelaysFromFirebase() {
-    
     static unsigned long lastFirebaseCheck = 0;
     unsigned long currentMillis = millis();
 
     if (currentMillis - lastFirebaseCheck >= 3000) { // Check every 3 seconds
         lastFirebaseCheck = currentMillis;
-        int relayStatus = fb.getInt("relays/status");
-        if (relayStatus >= 0) { // Ensure a valid value is retrieved
-            for (int i = 0; i < RELAY_COUNT; i++) {
-                if (relayStatus & (1 << i)) { // Check if the bit is set
-                    relay[i].TurnOn();
-                } else {
-                    relay[i].TurnOff();
+
+        // Perform asynchronous HTTP GET request to fetch relay status
+        http.begin(REFERENCE_URL + "relays/status.json"); // Firebase REST API endpoint
+        int httpCode = http.GET();
+
+        if (httpCode == HTTP_CODE_OK) {
+            String payload = http.getString();
+            int relayStatus = payload.toInt(); // Parse the relay status as an integer
+            if (relayStatus >= 0) { // Ensure a valid value is retrieved
+                for (int i = 0; i < RELAY_COUNT; i++) {
+                    if (relayStatus & (1 << i)) { // Check if the bit is set
+                        relay[i].TurnOn();
+                    } else {
+                        relay[i].TurnOff();
+                    }
                 }
+            } else {
+                Serial.println("Invalid relay status received from Firebase.");
             }
         } else {
-            Serial.println("Failed to read relay status from Firebase.");
+            Serial.println("Failed to fetch relay status from Firebase. HTTP code: " + String(httpCode));
         }
+
+        http.end(); // Close the connection
     }
 }
 
@@ -600,10 +611,13 @@ void loop() {
         // Calculate the average pressure
         averagePressure = (pressureReadings[0] + pressureReadings[1] + pressureReadings[2]) / 3;
 
-        // If the average pressure is below 130, stop all relays
-        if (averagePressure < pressureLimit) {
-            for (int i = 0; i < RELAY_COUNT; i++) {
-                relay[i].TurnOff();
+        // If the average pressure is below 130, stop all relaysv
+        if(CHECK_PRESSURE_LIMIT)
+        {
+            if (averagePressure < pressureLimit) {
+                for (int i = 0; i < RELAY_COUNT; i++) {
+                    //relay[i].TurnOff();
+                }
             }
         }
     }

@@ -15,4 +15,5 @@ class Relay {
     private:
         int relayNo;
         int pin;
+        int oldStatus = RELAY_OFF;
     };
