@@ -14,24 +14,24 @@ Relay::Relay(int _relayNo, int _pinNo)
   digitalWrite(pin, LOW);
 }
 
-void Relay::SetStateChangeCallback(void (*callback)(int, bool)) {
+void Relay::SetStateChangeCallback(void (*callback)(int, bool, int)) {
     stateChangeCallback = callback;
 }
 
-void Relay::TurnOn()
+void Relay::TurnOn(int reason)
 {
   digitalWrite(pin, LOW);
   status = RELAY_ON;
   if(oldStatus == RELAY_OFF) {
       // Only call the callback if the state has changed from OFF to ON
       if (stateChangeCallback) {
-          stateChangeCallback(relayNo, true);
+          stateChangeCallback(relayNo, true, reason);
       }
   }
   oldStatus = RELAY_ON;
 }
 
-void Relay::TurnOff()
+void Relay::TurnOff(int reason)
 {
   digitalWrite(pin, HIGH);
   status = RELAY_OFF;
@@ -39,7 +39,7 @@ void Relay::TurnOff()
         // Only call the callback if the state has changed from ON to OFF
         // and the callback is set
     if (stateChangeCallback) {
-        stateChangeCallback(relayNo, false);
+        stateChangeCallback(relayNo, false, reason);
     }
   }
   oldStatus = RELAY_OFF;

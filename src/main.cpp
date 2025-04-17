@@ -183,13 +183,13 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
         switch (newStatus) {
             case Alarm::AlarmStatus::ALARM_STATUS_RUNNING:
                 statusString = "RUNNING";
-                relay[rln-1].TurnOn();
+                relay[rln-1].TurnOn(1);
                 snprintf(time_format_buffer, sizeof(time_format_buffer), "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
                 pushover.sendNotification("Bahçe Sulama Başladı. " + String(rln) + " numaralı vana açıldı. Sistem saati: " + String(time_format_buffer) + " Beklenen görev süresi: " + String(alrm[alarmNo].repeat_count * (alrm[alarmNo].run_minutes + alrm[alarmNo].idle_minutes)) + " dakika. Görev No: " + String(alarmNo));
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STARTED" + "Relay No:" + String(rln));
                 break;
             case Alarm::AlarmStatus::ALARM_STATUS_STOPPED:
-                relay[rln-1].TurnOff();
+                relay[rln-1].TurnOff(2);
                 alrm[alarmNo].SaveLastDate(now.Day(), now.Month(), now.Year(), eprom); //normalde bunun alarm nesnesi içinde olması lazım. ama eprom nesnesinin her bir alarma gönderilmesi doğru mu bilemedim. şimdilik böyle kalsın.
                 pushover.sendNotification("Bahçe Sulandı. " + String(rln) + " numaralı vana kapandı.");
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STOPPED");
@@ -197,7 +197,7 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
                 break;
             case Alarm::AlarmStatus::ALARM_STATUS_WAITING:
                 statusString = "WAITING";
-                relay[rln-1].TurnOff();
+                relay[rln-1].TurnOff(3);
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " WAITING");
                 break;
             default:
@@ -207,7 +207,7 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
     }
 }
 
-void onRelayStateChange(int relayNo, bool isOn) {
+void onRelayStateChange(int relayNo, bool isOn, int reason) {
     String state = isOn ? "ON" : "OFF";
     Serial.println("Relay " + String(relayNo) + " turned " + state);
 
@@ -219,12 +219,12 @@ void onRelayStateChange(int relayNo, bool isOn) {
                        String(Rtc.GetDateTime().Hour()) + ":" +
                        String(Rtc.GetDateTime().Minute()) + ":" +
                        String(Rtc.GetDateTime().Second());
-    String logMessage = "[" + timestamp + "] Relay " + String(relayNo) + " turned " + state;
+    String logMessage = "[" + timestamp + "] Relay " + String(relayNo) + " turned " + state + " (Reason: " + String(reason) + ")";
     fb.pushString(logPath, logMessage);
     Serial.println("Logged to Firebase: " + logMessage);
 
     // Update Firebase relays/status value
-    int relayStatus = 0;
+    int relayStatus = fb.getInt("relays/status"); // Get current relay status
     if (isOn) {
         relayStatus |= (1 << (relayNo)); // Set the bit for the relay
     } else {
@@ -365,14 +365,15 @@ void handlePressure() {
 }
 
 void handleToggleRelay() {
+    Serial.println("Toggle Relay Request Received");
     if (server.hasArg("relayNo")) {
         int relayNo = server.arg("relayNo").toInt();
         if (relayNo >= 1 && relayNo <= RELAY_COUNT) {
             int relayIndex = relayNo - 1;
             if (relay[relayIndex].status == Relay::RELAY_OFF) {
-                relay[relayIndex].TurnOn();
+                relay[relayIndex].TurnOn(4);
             } else {
-                relay[relayIndex].TurnOff();
+                relay[relayIndex].TurnOff(5);
             }
             server.sendHeader("Access-Control-Allow-Origin", "*");
             server.send(200, "text/plain", "Relay toggled successfully.");
@@ -413,9 +414,9 @@ void updateRelaysFromFirebase() {
             if (relayStatus >= 0) { // Ensure a valid value is retrieved
                 for (int i = 0; i < RELAY_COUNT; i++) {
                     if (relayStatus & (1 << i)) { // Check if the bit is set
-                        relay[i].TurnOn();
+                        relay[i].TurnOn(6);
                     } else {
-                        relay[i].TurnOff();
+                        relay[i].TurnOff(7);
                     }
                 }
             } else {
@@ -737,9 +738,9 @@ void loop() {
                     if (!button1_enter_Pressed) {
                         button1_enter_Pressed = true;
                         if (relay[relay_no-1].status == Relay::RELAY_OFF) {
-                            relay[relay_no-1].TurnOn();
+                            relay[relay_no-1].TurnOn(8);
                         } else {
-                            relay[relay_no-1].TurnOff();
+                            relay[relay_no-1].TurnOff(9);
                         }
                     }
                 } else {

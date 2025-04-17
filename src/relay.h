@@ -5,12 +5,12 @@ class Relay {
             RELAY_OFF = 0
         };
         Status status;        
-        void (*stateChangeCallback)(int, bool) = nullptr;
+        void (*stateChangeCallback)(int, bool, int) = nullptr;
 
     Relay(int _relayno, int _pinno);
-    void TurnOn();
-    void TurnOff();
-    void SetStateChangeCallback(void (*callback)(int, bool));
+    void TurnOn(int reason = 0);
+    void TurnOff(int reason = 0);
+    void SetStateChangeCallback(void (*callback)(int, bool, int));
 
     private:
         int relayNo;
