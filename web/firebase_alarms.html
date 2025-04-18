@@ -89,7 +89,7 @@
                         <td>${alarm.repeat_count_remaining || "N/A"}</td>
                         <td>${alarm.run_remaining_minutes || "N/A"} min</td>
                         <td>${alarm.idle_remaining_minutes || "N/A"} min</td>
-                        <td>${formatDate(alarm.last_run_day, alarm.last_run_month, alarm.last_run_year)}</td>
+                        <td>${formatDate(alarm.last_run_date)}</td>
                         <td>${alarm.relay_no || "N/A"}</td>
                     `;
                     row.addEventListener("click", () => {
@@ -125,8 +125,10 @@
             return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         }
 
-        function formatDate(day, month, year) {
-            return `${day?.toString().padStart(2, '0') || "N/A"}/${month?.toString().padStart(2, '0') || "N/A"}/${year || "N/A"}`;
+        function formatDate(lastRunDate) {
+            if (!lastRunDate) return "N/A";
+            const [year, month, day] = lastRunDate.split("-");
+            return `${day}/${month}/${year}`;
         }
 
         // Fetch alarm data on page load
