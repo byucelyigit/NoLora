@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Alarm</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f9;
+        }
+        h1 {
+            color: #333;
+        }
+        form {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Edit Alarm</h1>
+    <form id="editAlarmForm">
+        <label for="alarmStatus">Status</label>
+        <select id="alarmStatus">
+            <option value="0">Stopped</option>
+            <option value="1">Running</option>
+            <option value="2">Waiting</option>
+        </select>
+
+        <label for="dayPeriod">Frequency</label>
+        <select id="dayPeriod">
+            <option value="0">Off</option>
+            <option value="1">Everyday</option>
+            <option value="2">Day After</option>
+            <option value="3">Two Days After</option>
+        </select>
+
+        <label for="alarmHour">Start Hour</label>
+        <input type="number" id="alarmHour" min="0" max="23">
+
+        <label for="alarmMinute">Start Minute</label>
+        <input type="number" id="alarmMinute" min="0" max="59">
+
+        <label for="runMinutes">Run Minutes</label>
+        <input type="number" id="runMinutes" min="0">
+
+        <label for="idleMinutes">Idle Minutes</label>
+        <input type="number" id="idleMinutes" min="0">
+
+        <label for="repeatCount">Repeat Count</label>
+        <input type="number" id="repeatCount" min="0">
+
+        <button type="button" id="saveButton">Save</button>
+    </form>
+
+    <script>
+        const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Alarms";
+        const urlParams = new URLSearchParams(window.location.search);
+        const alarmNo = urlParams.get("alarmNo");
+
+        async function fetchAlarmDetails() {
+            try {
+                const response = await fetch(`${firebaseUrl}/${alarmNo}.json`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch alarm: ${response.statusText}`);
+                }
+                const alarm = await response.json();
+                document.getElementById("alarmStatus").value = alarm.alarm_status;
+                document.getElementById("dayPeriod").value = alarm.day_period;
+                document.getElementById("alarmHour").value = alarm.alarm_hour;
+                document.getElementById("alarmMinute").value = alarm.alarm_minute;
+                document.getElementById("runMinutes").value = alarm.run_minutes;
+                document.getElementById("idleMinutes").value = alarm.idle_minutes;
+                document.getElementById("repeatCount").value = alarm.repeat_count;
+            } catch (error) {
+                console.error("Error fetching alarm details:", error);
+            }
+        }
+
+        async function saveAlarmDetails() {
+            const updatedAlarm = {
+                alarm_status: parseInt(document.getElementById("alarmStatus").value),
+                day_period: parseInt(document.getElementById("dayPeriod").value),
+                alarm_hour: parseInt(document.getElementById("alarmHour").value),
+                alarm_minute: parseInt(document.getElementById("alarmMinute").value),
+                run_minutes: parseInt(document.getElementById("runMinutes").value),
+                idle_minutes: parseInt(document.getElementById("idleMinutes").value),
+                repeat_count: parseInt(document.getElementById("repeatCount").value),
+            };
+
+            try {
+                const response = await fetch(`${firebaseUrl}/${alarmNo}.json`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updatedAlarm),
+                });
+                if (!response.ok) {
+                    throw new Error(`Failed to save alarm: ${response.statusText}`);
+                }
+                alert("Alarm updated successfully!");
+                window.location.href = "firebase_alarms.html";
+            } catch (error) {
+                console.error("Error saving alarm details:", error);
+            }
+        }
+
+        document.getElementById("saveButton").addEventListener("click", saveAlarmDetails);
+
+        // Fetch alarm details on page load
+        if (alarmNo) {
+            fetchAlarmDetails();
+        } else {
+            alert("No alarm number provided!");
+            window.location.href = "firebase_alarms.html";
+        }
+    </script>
+</body>
+</html>

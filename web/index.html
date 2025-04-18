@@ -3,120 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alarm JSON Viewer</title>
+    <title>Home Page</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            text-align: center;
+            margin: 50px;
             background-color: #f4f4f9;
         }
         h1 {
             color: #333;
         }
-        #json-output, #alarm-time, #alarm-duration, #alarm-status, #rtc-time {
-            white-space: pre-wrap;
-            background: #e8e8e8;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            overflow-x: auto;
-        }
         button {
-            padding: 10px 20px;
-            font-size: 16px;
+            padding: 15px 30px;
+            font-size: 18px;
             color: #fff;
             background-color: #007BFF;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            margin: 20px;
         }
         button:hover {
             background-color: #0056b3;
         }
-        input {
-            padding: 10px;
-            font-size: 16px;
-            margin-right: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
     </style>
 </head>
 <body>
-    <h1>Görev Bilgilendirme Ekranı</h1>
-    <div>
-        <input type="number" id="alarmNo" placeholder="Enter Task No" min="0" max="">
-        <button id="refresh-button">Refresh</button>
-    </div>
-    <h2>Task Status:</h2>
-    <div id="alarm-status">No data yet.</div>
-    <h2>Task Duration:</h2>
-    <div id="alarm-duration">No data yet.</div>
-    <h2>Task Time:</h2>
-    <div id="alarm-time">No data yet.</div>
-    <h2>RTC Time:</h2>
-    <div id="rtc-time">No data yet.</div>
-    <h2>JSON Output:</h2>
-    <div id="json-output">No data yet.</div>
-
-    <script>
-        document.getElementById('refresh-button').addEventListener('click', () => {
-            const alarmNo = document.getElementById('alarmNo').value;
-            if (!alarmNo) {
-                alert('Please enter a valid alarm number.');
-                return;
-            }
-
-            fetch(`http://192.168.2.80/alarm?alarmNo=${alarmNo}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Error: ${response.statusText}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    document.getElementById('json-output').textContent = JSON.stringify(data, null, 2);
-                    
-                    // Display alarm time in ss:mm format
-                    const alarmTime = `${String(data.alarm_hour).padStart(2, '0')}:${String(data.alarm_minute).padStart(2, '0')}`;
-                    document.getElementById('alarm-time').textContent = alarmTime;
-
-                    // Display repeat_count x (run_minutes + idle_minutes)
-                    const alarmDuration = `${data.repeat_count} x (${data.run_minutes} + ${data.idle_minutes})`;
-                    document.getElementById('alarm-duration').textContent = alarmDuration;
-
-                    // Display alarm status
-                    const statusMap = {
-                        0: 'stopped',
-                        1: 'running',
-                        2: 'waiting',
-                        3: 'failure'
-                    };
-                    const alarmStatus = statusMap[data.alarm_status] || 'unknown';
-                    document.getElementById('alarm-status').textContent = alarmStatus;
-                })
-                .catch(error => {
-                    document.getElementById('json-output').textContent = `Failed to fetch data: ${error.message}`;
-                    document.getElementById('alarm-time').textContent = 'No data yet.';
-                    document.getElementById('alarm-duration').textContent = 'No data yet.';
-                    document.getElementById('alarm-status').textContent = 'No data yet.';
-                });
-
-            // Fetch RTC time
-            fetch(`http://192.168.2.80/rtc`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Error: ${response.statusText}`);
-                    }
-                    return response.text();
-                })
-                .then(rtcTime => {
-                    document.getElementById('rtc-time').textContent = rtcTime;
-                })
-                .catch(error => {
-                    document.getElementById('rtc-time').textContent = `Failed to fetch RTC time: ${error.message}`;
-                });
-        });
-    </script>
+    <h1>Welcome to the Garden Control System</h1>
+    <button onclick="location.href='firebase_alarms.html'">Görevler</button>
+    <button onclick="location.href='relays.html'">Vanalar</button>
 </body>
 </html>
