@@ -10,6 +10,7 @@
             margin: 0;
             padding: 0;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
@@ -61,6 +62,13 @@
             <!-- Rows will be dynamically populated -->
         </tbody>
     </table>
+
+    <div id="paramsContainer" style="margin-top: 20px; text-align: center; font-size: 1.2em;">
+        <p><strong>Pressure Max:</strong> <span id="pressureMax">Loading...</span></p>
+        <p><strong>Pressure Min:</strong> <span id="pressureMin">Loading...</span></p>
+        <p><strong>System Time:</strong> <span id="systemTime">Loading...</span></p>
+        <p><strong>Pressure Current:</strong> <span id="pressureCurrent">Loading...</span></p>
+    </div>
 
     <script>
         const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Alarms.json";
@@ -131,8 +139,38 @@
             return `${day}/${month}/${year}`;
         }
 
-        // Fetch alarm data on page load
-        window.onload = fetchAlarmData;
+        async function fetchParams() {
+            const paramsUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Params.json";
+            const pressureCurrentUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Pressure/Current.json";
+
+            try {
+                const response = await fetch(paramsUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch params: ${response.statusText}`);
+                }
+                const params = await response.json();
+
+                document.getElementById("pressureMax").textContent = params.PressureMax || "N/A";
+                document.getElementById("pressureMin").textContent = params.PressureMin || "N/A";
+                document.getElementById("systemTime").textContent = params.SystemTime || "N/A";
+
+                // Fetch current pressure value
+                const pressureResponse = await fetch(pressureCurrentUrl);
+                if (!pressureResponse.ok) {
+                    throw new Error(`Failed to fetch current pressure: ${pressureResponse.statusText}`);
+                }
+                const pressureCurrent = await pressureResponse.json();
+                document.getElementById("pressureCurrent").textContent = pressureCurrent || "N/A";
+            } catch (error) {
+                console.error("Error fetching params or pressure:", error);
+            }
+        }
+
+        // Fetch alarm and params data on page load
+        window.onload = () => {
+            fetchAlarmData();
+            fetchParams();
+        };
     </script>
 </body>
 </html>
