@@ -77,6 +77,21 @@
         <label for="repeatCount">Repeat Count</label>
         <input type="number" id="repeatCount" min="0">
 
+        <label for="repeatCountRemaining">Remaining Repeat Count</label>
+        <input type="number" id="repeatCountRemaining" min="0">
+
+        <label for="runRemainingMinutes">Remaining Run Time (minutes)</label>
+        <input type="number" id="runRemainingMinutes" min="0">
+
+        <label for="idleRemainingMinutes">Remaining Idle Time (minutes)</label>
+        <input type="number" id="idleRemainingMinutes" min="0">
+
+        <label for="lastRunDate">Last Run Date</label>
+        <input type="date" id="lastRunDate">
+
+        <label for="relayNo">Relay No</label>
+        <input type="number" id="relayNo" min="0">
+
         <button type="button" id="saveButton">Save</button>
     </form>
 
@@ -99,6 +114,11 @@
                 document.getElementById("runMinutes").value = alarm.run_minutes;
                 document.getElementById("idleMinutes").value = alarm.idle_minutes;
                 document.getElementById("repeatCount").value = alarm.repeat_count;
+                document.getElementById("repeatCountRemaining").value = alarm.repeat_count_remaining || 0;
+                document.getElementById("runRemainingMinutes").value = alarm.run_remaining_minutes || 0;
+                document.getElementById("idleRemainingMinutes").value = alarm.idle_remaining_minutes || 0;
+                document.getElementById("lastRunDate").value = alarm.last_run_date || "";
+                document.getElementById("relayNo").value = alarm.relay_no || 0;
             } catch (error) {
                 console.error("Error fetching alarm details:", error);
             }
@@ -113,6 +133,11 @@
                 run_minutes: parseInt(document.getElementById("runMinutes").value),
                 idle_minutes: parseInt(document.getElementById("idleMinutes").value),
                 repeat_count: parseInt(document.getElementById("repeatCount").value),
+                repeat_count_remaining: parseInt(document.getElementById("repeatCountRemaining").value),
+                run_remaining_minutes: parseInt(document.getElementById("runRemainingMinutes").value),
+                idle_remaining_minutes: parseInt(document.getElementById("idleRemainingMinutes").value),
+                last_run_date: document.getElementById("lastRunDate").value,
+                relay_no: parseInt(document.getElementById("relayNo").value),
             };
 
             try {
@@ -124,7 +149,7 @@
                 if (!response.ok) {
                     throw new Error(`Failed to save alarm: ${response.statusText}`);
                 }
-                alert("Alarm updated successfully!");
+                //alert("Alarm updated successfully!");
                 window.location.href = "firebase_alarms.html";
             } catch (error) {
                 console.error("Error saving alarm details:", error);

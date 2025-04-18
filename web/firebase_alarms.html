@@ -50,6 +50,11 @@
                 <th>Run Minutes</th>
                 <th>Idle Minutes</th>
                 <th>Repeat Count</th>
+                <th>Remaining Repeat Count</th>
+                <th>Remaining Run Time</th>
+                <th>Remaining Idle Time</th>
+                <th>Last Run Date</th>
+                <th>Relay No</th>
             </tr>
         </thead>
         <tbody id="alarmTableBody">
@@ -81,6 +86,11 @@
                         <td>${alarm.run_minutes}</td>
                         <td>${alarm.idle_minutes}</td>
                         <td>${alarm.repeat_count}</td>
+                        <td>${alarm.repeat_count_remaining || "N/A"}</td>
+                        <td>${alarm.run_remaining_minutes || "N/A"} min</td>
+                        <td>${alarm.idle_remaining_minutes || "N/A"} min</td>
+                        <td>${formatDate(alarm.last_run_day, alarm.last_run_month, alarm.last_run_year)}</td>
+                        <td>${alarm.relay_no || "N/A"}</td>
                     `;
                     row.addEventListener("click", () => {
                         window.location.href = `firebase_edit_alarm.html?alarmNo=${alarmNo}`;
@@ -113,6 +123,10 @@
 
         function formatTime(hour, minute) {
             return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        }
+
+        function formatDate(day, month, year) {
+            return `${day?.toString().padStart(2, '0') || "N/A"}/${month?.toString().padStart(2, '0') || "N/A"}/${year || "N/A"}`;
         }
 
         // Fetch alarm data on page load
