@@ -592,12 +592,12 @@ void loop() {
     static unsigned long lastPressureCheck = 0;
     static int pressureReadings[3] = {0, 0, 0};
     static int pressureIndex = 0;
-
+    int pressureValue = measurePressure(); // Measure pressure value
 
     unsigned long currentMillis = millis();
 
     // Turn off the screen after 10 seconds of inactivity
-    if (currentMillis - lastInteractionTime >= 10000) {
+    if (currentMillis - lastInteractionTime >= 90000) {
         //Serial.println("Screen off");
         u8g2.setPowerSave(1); // Turn off the display
         screenOn = false;
@@ -606,7 +606,7 @@ void loop() {
     // Update pressure readings every second
     if (currentMillis - lastPressureCheck >= pressureMeasureTime) {
         lastPressureCheck = currentMillis;
-        pressureReadings[pressureIndex] = measurePressure();
+        pressureReadings[pressureIndex] = pressureValue;
         pressureIndex = (pressureIndex + 1) % pressureMeasureCount;
 
         // Calculate the average pressure
@@ -662,7 +662,7 @@ void loop() {
             if (digitalRead(BUTTON2_EXIT) == 0) {
                 if (!button2_exit_pressed) {
                     button2_exit_pressed = true;
-                    page_no = Display::Page::PAGE_MANUAL; rotaryEncoder.setBoundaries(1, RELAY_COUNT+1, true );
+                    page_no = Display::Page::PAGE_MANUAL; rotaryEncoder.setBoundaries(1, RELAY_COUNT+2, true );
                 }
             } else {
                 button2_exit_pressed = false;
@@ -754,6 +754,10 @@ void loop() {
                     String ipAddress = WiFi.localIP().toString();
                     display.showIPAddress(ipAddress.c_str());
                 }
+            }
+            else if (functionNo == RELAY_COUNT + 2) // Show Pressure
+            {
+                display.showPressure(pressureValue); // Assuming display.showPressure() is a method to show pressure
             }
             break;
     }

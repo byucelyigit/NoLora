@@ -21,6 +21,7 @@ public:
     void show(Alarm a, int param_no);
     void show(int param_value, int mode);
     void showIPAddress(const char* ipAddress);
+    void showPressure(int pressure);
 
 private:
     U8G2 &u8g2;

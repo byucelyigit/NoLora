@@ -140,3 +140,13 @@ void Display::showIPAddress(const char* ipAddress) {
         u8g2.drawStr(0, 30, ipAddress);
     } while (u8g2.nextPage());
 }
+
+void Display::showPressure(int pressure) {
+    char pressureString[14];
+    snprintf_P(pressureString, sizeof(pressureString), PSTR("P: %03u"), pressure);
+    u8g2.firstPage();
+    do {
+        u8g2.setFont(u8g2_font_fur17_tr);
+        u8g2.drawStr(0, 22, pressureString);
+    } while (u8g2.nextPage());
+}
