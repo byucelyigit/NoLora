@@ -59,6 +59,7 @@ int pressureLimit = 10;
 int pressureMeasureTime = 1000; // 1 second
 int pressureMeasureCount = 3;
 int averagePressure;
+long lastPingUpdate = 0;
 
 
 char time_format_buffer[10] = "00:00:00"; 
@@ -429,6 +430,8 @@ void updateRelaysFromFirebase() {
     }
 }
 
+
+
 void checkWiFiReconnect() {
     static unsigned long lastAttempt = 0;
     unsigned long now = millis();
@@ -438,6 +441,20 @@ void checkWiFiReconnect() {
         WiFi.disconnect();
         WiFi.begin(ssid, password);
         lastAttempt = now;
+    }
+}
+
+void updatePingTime() {
+    long currentMillis = millis();
+    if (currentMillis - lastPingUpdate >= 30000) {
+        lastPingUpdate = currentMillis;
+        RtcDateTime now = Rtc.GetDateTime();
+        char timeStr[20];
+        snprintf(timeStr, sizeof(timeStr), "%04u-%02u-%02u %02u:%02u:%02u",
+            now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second());
+        fb.setString("Params/pingtime", String(timeStr));
+        Serial.print("Pingtime updated: ");
+        Serial.println(timeStr);
     }
 }
 
@@ -827,5 +844,6 @@ void loop() {
     }
 
     updateRelaysFromFirebase();
+    updatePingTime();
     server.handleClient();
 }

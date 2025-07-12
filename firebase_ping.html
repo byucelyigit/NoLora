@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Firebase Ping Time Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { 
+            background: #f4f4f9; 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh;
+        }
+        .container {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 32px 40px;
+            text-align: center;
+        }
+        h1 {
+            color: #007BFF;
+            margin-bottom: 16px;
+        }
+        .ping-label {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .ping-value {
+            font-size: 2.2em;
+            color: #28a745;
+            font-weight: bold;
+            margin-bottom: 16px;
+        }
+        .error {
+            color: #dc3545;
+            font-size: 1em;
+        }
+        .refresh-btn {
+            background: #007BFF;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 24px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .refresh-btn:hover {
+            background: #0056b3;
+        }
+        .timestamp {
+            color: #888;
+            font-size: 0.95em;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Firebase Ping Time</h1>
+        <div class="ping-label">Last Ping Time:</div>
+        <div id="pingValue" class="ping-value">Loading...</div>
+        <button class="refresh-btn" onclick="fetchPingTime()">Refresh</button>
+        <div id="errorMsg" class="error"></div>
+        <div class="timestamp" id="lastUpdated"></div>
+    </div>
+    <script>
+        // Set your Firebase Realtime Database URL here (ending with a slash)
+        const FIREBASE_DB_URL = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/";
+
+        function fetchPingTime() {
+            document.getElementById('errorMsg').textContent = '';
+            fetch(FIREBASE_DB_URL + "Params/pingtime.json")
+                .then(response => {
+                    if (!response.ok) throw new Error("Network response was not ok");
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('pingValue').textContent = data ? data : "No data";
+                    document.getElementById('lastUpdated').textContent = "Last updated: " + new Date().toLocaleTimeString();
+                })
+                .catch(error => {
+                    document.getElementById('pingValue').textContent = "--";
+                    document.getElementById('errorMsg').textContent = "Error fetching ping time: " + error.message;
+                    document.getElementById('lastUpdated').textContent = "";
+                });
+        }
+
+        // Initial fetch and auto-refresh every 30 seconds
+        fetchPingTime();
+        setInterval(fetchPingTime, 30000);
+    </script>
+</body>
+</html>
