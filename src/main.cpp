@@ -82,7 +82,6 @@ Display display(u8g2);
 Firebase fb(REFERENCE_URL);
 
 //Preferences pref;
-
 Alarm alrm[] = {Alarm(0), Alarm(1), Alarm(2), Alarm(3), Alarm(4), Alarm(5), Alarm(6), Alarm(7)};
 Relay relay[] = {Relay(0, RELAY1), Relay(1, RELAY2), Relay(2, RELAY3), Relay(3, RELAY4)};
 
@@ -430,6 +429,18 @@ void updateRelaysFromFirebase() {
     }
 }
 
+void checkWiFiReconnect() {
+    static unsigned long lastAttempt = 0;
+    unsigned long now = millis();
+    if (WiFi.status() != WL_CONNECTED && now - lastAttempt > 5000) { // Try every 5 seconds
+        Serial.println("WiFi not connected. Attempting reconnect...");
+        display.showIPAddress("", "reconnecting...");
+        WiFi.disconnect();
+        WiFi.begin(ssid, password);
+        lastAttempt = now;
+    }
+}
+
 void setup(){
 	Serial.begin(115200);
 
@@ -438,13 +449,13 @@ void setup(){
     }
 
     WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(1000);
-        Serial.println("Bağlanıyor...");
-    }
-    Serial.println("WiFi bağlantısı başarılı!");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
+    // while (WiFi.status() != WL_CONNECTED) {
+    //     delay(1000);
+    //     Serial.println("Bağlanıyor...");
+    // }
+    // Serial.println("WiFi bağlantısı başarılı!");
+    // Serial.print("IP Address: ");
+    // Serial.println(WiFi.localIP());
 
     // Initialize mDNS
     // if (!MDNS.begin("esp32")) { // Replace "esp32" with your desired mDNS hostname
@@ -589,6 +600,9 @@ void setup(){
 }
 
 void loop() {
+
+    checkWiFiReconnect(); // Check WiFi connection status and reconnect if needed
+
     static unsigned long lastPressureCheck = 0;
     static int pressureReadings[3] = {0, 0, 0};
     static int pressureIndex = 0;
@@ -750,9 +764,16 @@ void loop() {
             } 
             else if (functionNo == RELAY_COUNT + 1) // Show IP address
             {
+                String ipAddress = "";
+                String additionalInfo = "";
                 if (screenOn) {
-                    String ipAddress = WiFi.localIP().toString();
-                    display.showIPAddress(ipAddress.c_str());
+                    String connStatus = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Disconnected";
+                    if(connStatus == "Connected") {
+                        ipAddress = WiFi.localIP().toString();
+                        long rssi = WiFi.RSSI();
+                        additionalInfo = "RSSI: " + String(rssi);
+                    }
+                    display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str());
                 }
             }
             else if (functionNo == RELAY_COUNT + 2) // Show Pressure

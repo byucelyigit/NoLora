@@ -20,7 +20,7 @@ public:
     void showManuelRelayStatus(int relay_no, int status);
     void show(Alarm a, int param_no);
     void show(int param_value, int mode);
-    void showIPAddress(const char* ipAddress);
+    void showIPAddress(const char* ipAddress, const char* connStatus = "", const char* additionalInfo = nullptr);
     void showPressure(int pressure);
 
 private:

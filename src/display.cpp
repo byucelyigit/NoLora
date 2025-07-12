@@ -131,13 +131,20 @@ void Display::show(Alarm a, RtcDateTime now, int pressure) {
         } while ( u8g2.nextPage() );  
     }
 
-void Display::showIPAddress(const char* ipAddress) {
+void Display::showIPAddress(const char* ipAddress, const char* connStatus, const char* additionalInfo) {
     u8g2.firstPage();
     do {
         u8g2.setFont(u8g2_font_7x13B_mf);
         u8g2.drawStr(0, 10, "Device IP Address:");
         u8g2.setFont(u8g2_font_7x13B_mf);
         u8g2.drawStr(0, 30, ipAddress);
+        u8g2.setFont(u8g2_font_8x13_tr); // Use a smaller font for connection status
+        u8g2.setCursor(0, 50); // Adjust Y as needed to appear under IP
+        u8g2.print(connStatus);
+        if (additionalInfo != nullptr && strlen(additionalInfo) > 0) {
+            u8g2.setCursor(0, 60); // Adjust Y for additional info
+            u8g2.print(additionalInfo);
+        }   
     } while (u8g2.nextPage());
 }
 
