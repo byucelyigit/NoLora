@@ -106,13 +106,34 @@
                 });
         }
 
+        // Fetch relay names and update button labels
+        function fetchRelayNames() {
+            for (let i = 0; i < 8; i++) {
+                fetch(`${firebaseUrl}/relays/relay${i}.json`)
+                    .then(response => response.ok ? response.json() : null)
+                    .then(name => {
+                        const btn = document.getElementById(`relay-${i}`);
+                        if (name && typeof name === "string" && name.trim() !== "") {
+                            btn.textContent = name;
+                        } else {
+                            btn.textContent = `Relay ${i + 1}`;
+                        }
+                    })
+                    .catch(() => {
+                        const btn = document.getElementById(`relay-${i}`);
+                        btn.textContent = `Relay ${i + 1}`;
+                    });
+            }
+        }
+
         // Attach event listeners to buttons
         for (let i = 0; i < 8; i++) {
             document.getElementById(`relay-${i}`).addEventListener("click", () => toggleRelay(i));
         }
 
-        // Initial fetch of relay status
+        // Initial fetch of relay status and names
         fetchRelayStatus();
+        fetchRelayNames();
     </script>
 </body>
 </html>

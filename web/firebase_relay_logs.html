@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Relay Logs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f9;
+            margin: 0;
+            padding: 0;
+        }
+        .relay-section {
+            margin: 30px auto;
+            width: 95%;
+            max-width: 900px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            border-radius: 8px;
+            padding: 20px 30px 30px 30px;
+        }
+        .relay-title {
+            font-size: 1.3em;
+            color: #007BFF;
+            margin-bottom: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 7px 10px;
+            text-align: center;
+        }
+        th {
+            background: #007BFF;
+            color: #fff;
+        }
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        tr:hover {
+            background: #f1f1f1;
+        }
+        .loading {
+            color: #888;
+            font-style: italic;
+        }
+        .clear-btn {
+            display: block;
+            margin: 20px auto 10px auto;
+            padding: 10px 24px;
+            background: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .clear-btn:hover {
+            background: #b52a37;
+        }
+    </style>
+</head>
+<body>
+    <h2 style="text-align:center; margin-top: 30px;">Relay Logs</h2>
+    <button class="clear-btn" id="clearLogsBtn">Clear All Logs</button>
+    <div id="logsContainer"></div>
+    <script>
+        const relayCount = 8;
+        const baseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/RelayLogs";
+
+        function formatTimestamp(ts) {
+            // Expecting ISO or "YYYY-MM-DD HH:MM:SS" or epoch ms
+            if (!ts) return "N/A";
+            if (!isNaN(ts)) {
+                // epoch ms
+                const d = new Date(Number(ts));
+                return d.toLocaleString();
+            }
+            // Try to parse as ISO or "YYYY-MM-DD HH:MM:SS"
+            const d = new Date(ts);
+            if (!isNaN(d.getTime())) return d.toLocaleString();
+            return ts;
+        }
+
+        async function fetchRelayLog(relayNo) {
+            const url = `${baseUrl}/Relay${relayNo}/Log.json`;
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error("Failed to fetch");
+                return await resp.json();
+            } catch {
+                return null;
+            }
+        }
+
+        function renderTable(relayNo, logData) {
+            let html = `<div class="relay-section">
+                <div class="relay-title">Relay #${relayNo}</div>`;
+            if (!logData || Object.keys(logData).length === 0) {
+                html += `<div class="loading">No logs found.</div></div>`;
+                return html;
+            }
+            html += `<table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            // logData: { key: { timestamp, value } } or { key: value }
+            // Try to sort by timestamp if possible
+            const rows = [];
+            for (const [key, entry] of Object.entries(logData)) {
+                let ts, val;
+                if (typeof entry === "object" && entry !== null) {
+                    ts = entry.timestamp || key;
+                    val = entry.value !== undefined ? entry.value : JSON.stringify(entry);
+                } else {
+                    ts = key;
+                    val = entry;
+                }
+                rows.push({ ts, val });
+            }
+            rows.sort((a, b) => {
+                // Try to sort by timestamp descending
+                const ta = new Date(a.ts).getTime();
+                const tb = new Date(b.ts).getTime();
+                return tb - ta;
+            });
+            for (const row of rows) {
+                html += `<tr>
+                    <td>${formatTimestamp(row.ts)}</td>
+                    <td>${row.val}</td>
+                </tr>`;
+            }
+            html += `</tbody></table></div>`;
+            return html;
+        }
+
+        async function loadAllRelayLogs() {
+            const container = document.getElementById("logsContainer");
+            container.innerHTML = "";
+            for (let i = 0; i < relayCount; i++) {
+                container.innerHTML += `<div class="relay-section"><div class="relay-title">Relay #${i}</div><div class="loading">Loading...</div></div>`;
+            }
+            for (let i = 0; i < relayCount; i++) {
+                const logData = await fetchRelayLog(i);
+                const relayDivs = container.getElementsByClassName("relay-section");
+                relayDivs[i].outerHTML = renderTable(i, logData);
+            }
+        }
+
+        async function clearAllLogs() {
+            if (!confirm("Are you sure you want to clear ALL relay logs?")) return;
+            const relayPromises = [];
+            for (let i = 0; i < relayCount; i++) {
+                const url = `${baseUrl}/Relay${i}/Log.json`;
+                relayPromises.push(fetch(url, { method: "DELETE" }));
+            }
+            try {
+                await Promise.all(relayPromises);
+                loadAllRelayLogs();
+            } catch (e) {
+                alert("Failed to clear logs.");
+            }
+        }
+
+        document.getElementById("clearLogsBtn").onclick = clearAllLogs;
+
+        window.onload = loadAllRelayLogs;
+    </script>
+</body>
+</html>
