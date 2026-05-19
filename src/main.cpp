@@ -26,7 +26,7 @@ RTC_DATA_ATTR int bootCount = 0;
 
 //pushover diye bir uygulmayı kullanarak iphone bildirim gönderme işlemi yapılabilir.
 //https://pushover.net/apps/9auj2r-gardener
-const char* ssid = "Atolye";
+const char* ssid = "atolye";
 const char* password = "87973341";
 
 //aşağıdaki veriye erişme sınırı rule tanımı var. Bunu kontrol etmeyi unutma
