@@ -26,8 +26,10 @@ RTC_DATA_ATTR int bootCount = 0;
 
 //pushover diye bir uygulmayı kullanarak iphone bildirim gönderme işlemi yapılabilir.
 //https://pushover.net/apps/9auj2r-gardener
-const char* ssid = "TP-Link_D1BE";
+const char* ssid = "Atolye";
 const char* password = "87973341";
+
+//aşağıdaki veriye erişme sınırı rule tanımı var. Bunu kontrol etmeyi unutma
 const String REFERENCE_URL = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/";
 
 
