@@ -677,130 +677,18 @@ void loop() {
     //performMDNSLookup("example.local"); // Replace "example.local" with the desired mDNS hostname
 
     RtcDateTime now = Rtc.GetDateTime();
-    switch (page_no) {
-        case Display::Page::PAGE_ALARM_LIST:
-            if(digitalRead(BUTTON1_ENTER) == 0) { 
-                if(!button1_enter_Pressed)
-                {
-                    button1_enter_Pressed = true;
-                    page_no = Display::Page::PAGE_PARAM_LIST;
-                    rotaryEncoder.setBoundaries(1, PARAMETER_COUNT, true ); 
-                    rotaryEncoder.setEncoderValue(param_no); 
-                    //sendNotification();
-                }
-            } else {
-                button1_enter_Pressed = false;
-            }
-            // Handle button press to turn relay on only once until released
-            if (digitalRead(BUTTON2_EXIT) == 0) {
-                if (!button2_exit_pressed) {
-                    button2_exit_pressed = true;
-                    page_no = Display::Page::PAGE_MANUAL; rotaryEncoder.setBoundaries(1, RELAY_COUNT+2, true );
-                }
-            } else {
-                button2_exit_pressed = false;
-            }            
-
-            display.show(alrm[alarm_no - 1], now, averagePressure);        
-            break;
-
-        case Display::Page::PAGE_PARAM_LIST:
-            if(digitalRead(BUTTON1_ENTER) == 0)  {
-                if(!button1_enter_Pressed)
-                {
-                    button1_enter_Pressed = true;
-                    page_no = Display::Page::PAGE_PARAM_VALUE; 
-                    param_value = alrm[alarm_no - 1].GetParamValue(param_no); 
-                    int min = alrm[alarm_no-1].GetParamMinValue(param_no);
-                    int max = alrm[alarm_no-1].GetParamMaxValue(param_no);
-                    rotaryEncoder.setBoundaries(min, max, false);
-                } 
-            } else {
-                button1_enter_Pressed = false;
-            }
-            if (digitalRead(BUTTON2_EXIT) == 0) {
-                if (!button2_exit_pressed) {
-                    button2_exit_pressed = true;
-                    page_no = Display::Page::PAGE_ALARM_LIST;   
-                    rotaryEncoder.setBoundaries(1, ALARM_COUNT, true );
-                } else {
-                    button2_exit_pressed = false;
-                }
-            }
-            display.show(alrm[alarm_no-1],  param_no);        
-            break;
-        case Display::Page::PAGE_PARAM_VALUE:
-            if(digitalRead(BUTTON1_ENTER) == 0){  
-                if(!button1_enter_Pressed) { 
-                    button1_enter_Pressed = true;
-                    alrm[alarm_no - 1].SetParamValue(param_no, param_value, eprom);
-                    page_no = Display::Page::PAGE_PARAM_LIST; 
-                } 
-            } else {
-                button1_enter_Pressed = false;
-            }
-
-            if (digitalRead(BUTTON2_EXIT) == 0) {
-                if (!button2_exit_pressed) {
-                    button2_exit_pressed = true;
-                    page_no = Display::Page::PAGE_PARAM_LIST;
-                
-                } else {
-                    button2_exit_pressed = false;
-                }            
-            }
-            display.show(param_value, 1);        
-            break;
-        case Display::Page::PAGE_MANUAL:
-            // Handle button press to turn relay on only once until released
-            int relay_no = functionNo-1;
-
-            if (digitalRead(BUTTON2_EXIT) == 0) {
-                if (!button2_exit_pressed) {
-                    button2_exit_pressed = true;
-                    page_no = Display::Page::PAGE_ALARM_LIST; rotaryEncoder.setBoundaries(1, ALARM_COUNT, true );
-                }
-            } else {
-                button2_exit_pressed = false;
-            }
-            if(functionNo <= RELAY_COUNT) // ilk parametreler rölelerin açılıp kapanması için.
-            {
-                // Handle button press to turn relay on only once until released
-                relay_no = functionNo;
-                if (digitalRead(BUTTON1_ENTER) == 0) {
-                    if (!button1_enter_Pressed) {
-                        button1_enter_Pressed = true;
-                        if (relay[relay_no-1].status == Relay::RELAY_OFF) {
-                            relay[relay_no-1].TurnOn(8);
-                        } else {
-                            relay[relay_no-1].TurnOff(9);
-                        }
-                    }
-                } else {
-                    button1_enter_Pressed = false;
-                }
-                display.showManuelRelayStatus(relay_no, relay[relay_no-1].status);
-            } 
-            else if (functionNo == RELAY_COUNT + 1) // Show IP address
-            {
-                String ipAddress = "";
-                String additionalInfo = "";
-                if (screenOn) {
-                    String connStatus = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Disconnected";
-                    if(connStatus == "Connected") {
-                        ipAddress = WiFi.localIP().toString();
-                        long rssi = WiFi.RSSI();
-                        additionalInfo = "RSSI: " + String(rssi);
-                    }
-                    display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str());
-                }
-            }
-            else if (functionNo == RELAY_COUNT + 2) // Show Pressure
-            {
-                display.showPressure(pressureValue); // Assuming display.showPressure() is a method to show pressure
-            }
-            break;
+    String ipAddress = "";
+    String additionalInfo = "";
+    if (screenOn) {
+        String connStatus = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Disconnected";
+        if(connStatus == "Connected") {
+            ipAddress = WiFi.localIP().toString();
+            long rssi = WiFi.RSSI();
+            additionalInfo = "RSSI: " + String(rssi);
+        }
+        display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str());
     }
+    //display.showPressure(pressureValue); // Assuming display.showPressure() is a method to show pressure
 
     for (int i = 0; i < 8; i++) {
         alrm[i].Update(now);
