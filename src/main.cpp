@@ -654,7 +654,8 @@ void setup(){
         alrm[i].SetStatusChangeCallback(onAlarmStatusChange);
     }
 
-    syncAllAlarmsFromFirebase();
+    //syncAllAlarmsFromFirebase();
+    syncAlarmFromFirebase(0);
 
     for (int i = 0; i < RELAY_COUNT; i++) {
         relay[i].SetStateChangeCallback(onRelayStateChange);
