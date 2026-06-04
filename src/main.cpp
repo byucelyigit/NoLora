@@ -64,6 +64,7 @@ int pressureMeasureCount = 3;
 int averagePressure;
 long lastPingUpdate = 0;
 
+bool alarmsynced = false;
 
 char time_format_buffer[10] = "00:00:00"; 
 char date_format_buffer[10] = "00/00/00"; 
@@ -655,7 +656,7 @@ void setup(){
     }
 
     //syncAllAlarmsFromFirebase();
-    syncAlarmFromFirebase(0);
+
 
     for (int i = 0; i < RELAY_COUNT; i++) {
         relay[i].SetStateChangeCallback(onRelayStateChange);
@@ -764,10 +765,17 @@ void loop() {
             ipAddress = WiFi.localIP().toString();
             long rssi = WiFi.RSSI();
             additionalInfo = "RSSI: " + String(rssi);
+            if(!alarmsynced) {
+                   syncAlarmFromFirebase(0);
+                   syncAlarmFromFirebase(1);
+                   syncAlarmFromFirebase(2);
+                   syncAlarmFromFirebase(3);
+                alarmsynced = true;
+            }
+            display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str(), now, pressureValue);
         }
-        display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str(), now, pressureValue);
-    }
     //display.showPressure(pressureValue); // Assuming display.showPressure() is a method to show pressure
+    }
 
     for (int i = 0; i < 8; i++) {
         alrm[i].Update(now);
@@ -777,6 +785,8 @@ void loop() {
 	long reading = 0;
 	int mode = 1;
 
+
+    
 
 
     //buraya RELAY1 pinini her saniye açıp kapayacak kod yaz:
