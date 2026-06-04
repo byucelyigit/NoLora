@@ -686,7 +686,7 @@ void loop() {
             long rssi = WiFi.RSSI();
             additionalInfo = "RSSI: " + String(rssi);
         }
-        display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str());
+        display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str(), now, pressureValue);
     }
     //display.showPressure(pressureValue); // Assuming display.showPressure() is a method to show pressure
 
