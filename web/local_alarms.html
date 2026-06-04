@@ -78,9 +78,11 @@
     <div id="pressureGraph"></div>
 
     <script>
+        const DEVICE_IP = "192.168.1.212";
+
         async function fetchSystemTime() {
             try {
-                const response = await fetch(`http://192.168.2.80/rtc`);
+                const response = await fetch(`http://${DEVICE_IP}/rtc`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch system time: ${response.statusText}`);
                 }
@@ -98,7 +100,7 @@
 
             for (let alarmNo = 0; alarmNo < 8; alarmNo++) {
                 try {
-                    const response = await fetch(`http://192.168.2.80/alarm?alarmNo=${alarmNo}`);
+                    const response = await fetch(`http://${DEVICE_IP}/alarm?alarmNo=${alarmNo}`);
                     if (!response.ok) {
                         throw new Error(`Failed to fetch alarm ${alarmNo}: ${response.statusText}`);
                     }
@@ -160,7 +162,7 @@
 
         async function fetchAveragePressure() {
             try {
-                const response = await fetch(`http://192.168.2.80/pressure`);
+                const response = await fetch(`http://${DEVICE_IP}/pressure`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch average pressure: ${response.statusText}`);
                 }
