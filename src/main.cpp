@@ -10,6 +10,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
+#include <ArduinoJson.h>
 #include <pushover.h>
 #include <Firebase.h>
 
@@ -399,6 +400,81 @@ void writeAlarmsToFirebase() {
     }
 }
 
+bool applyAlarmParamFromJson(int alarmNo, JsonObjectConst alarmObj, const char* key, int paramNo) {
+    JsonVariantConst field = alarmObj[key];
+    if (field.isNull()) {
+        return false;
+    }
+
+    int paramValue = field.as<int>();
+    alrm[alarmNo].SetParamValue(paramNo, paramValue, eprom);
+    Serial.println("Alarm " + String(alarmNo) + ": synced " + String(key) + "=" + String(paramValue));
+    return true;
+}
+
+bool syncAlarmFromFirebase(int alarmNo) {
+    if (alarmNo < 0 || alarmNo >= ALARM_COUNT) {
+        Serial.println("syncAlarmFromFirebase: invalid alarm number " + String(alarmNo));
+        return false;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("syncAlarmFromFirebase: WiFi not connected for alarm " + String(alarmNo));
+        return false;
+    }
+
+    HTTPClient alarmHttp;
+    String alarmUrl = REFERENCE_URL + "Alarms/Alarm" + String(alarmNo) + ".json";
+    alarmHttp.begin(alarmUrl);
+    int httpCode = alarmHttp.GET();
+
+    if (httpCode != HTTP_CODE_OK) {
+        Serial.println("syncAlarmFromFirebase: GET failed for alarm " + String(alarmNo) + ", HTTP code: " + String(httpCode));
+        alarmHttp.end();
+        return false;
+    }
+
+    String payload = alarmHttp.getString();
+    alarmHttp.end();
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, payload);
+    if (error) {
+        Serial.println("syncAlarmFromFirebase: JSON parse error for alarm " + String(alarmNo) + ": " + String(error.c_str()));
+        return false;
+    }
+
+    JsonObjectConst alarmObj = doc.as<JsonObjectConst>();
+    int appliedCount = 0;
+
+    // Sync only core scheduling and relay fields.
+    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "alarm_hour", 1) ? 1 : 0;
+    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "alarm_minute", 2) ? 1 : 0;
+    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "repeat_count", 3) ? 1 : 0;
+    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "run_minutes", 4) ? 1 : 0;
+    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "idle_minutes", 5) ? 1 : 0;
+    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "day_period", 6) ? 1 : 0;
+    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "relay_no", 7) ? 1 : 0;
+
+    if (appliedCount == 0) {
+        Serial.println("syncAlarmFromFirebase: no syncable fields found for alarm " + String(alarmNo));
+        return false;
+    }
+
+    Serial.println("syncAlarmFromFirebase: alarm " + String(alarmNo) + " synced, fields applied: " + String(appliedCount));
+    return true;
+}
+
+void syncAllAlarmsFromFirebase() {
+    int syncedCount = 0;
+    for (int alarmNo = 0; alarmNo < ALARM_COUNT; alarmNo++) {
+        if (syncAlarmFromFirebase(alarmNo)) {
+            syncedCount++;
+        }
+    }
+    Serial.println("syncAllAlarmsFromFirebase: synced " + String(syncedCount) + "/" + String(ALARM_COUNT) + " alarms.");
+}
+
 void updateRelaysFromFirebase() {
     static unsigned long lastFirebaseCheck = 0;
     unsigned long currentMillis = millis();
@@ -577,6 +653,8 @@ void setup(){
         alrm[i].initAlarms(eprom);
         alrm[i].SetStatusChangeCallback(onAlarmStatusChange);
     }
+
+    syncAllAlarmsFromFirebase();
 
     for (int i = 0; i < RELAY_COUNT; i++) {
         relay[i].SetStateChangeCallback(onRelayStateChange);
