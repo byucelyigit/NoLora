@@ -162,9 +162,9 @@
         function resolveRelayDescription(relayNo, relays) {
             if (!relays || typeof relays !== "object") return "";
 
-            const directKey = `relay${relayNo}`;
-            const minusOneKey = `relay${relayNo - 1}`;
-            const relayValue = relays[directKey] ?? relays[minusOneKey];
+            // UI relay numbering starts at 1, Firebase relay keys start at 0.
+            const relayKey = `relay${relayNo - 1}`;
+            const relayValue = relays[relayKey];
 
             if (relayValue === undefined || relayValue === null) return "";
 
