@@ -160,7 +160,13 @@
 
                 let changedAlarmsValue = -1;
                 if (hasAlarmChanged) {
-                    const alarmNoInt = parseInt(alarmNo, 10);
+                    const alarmNoFromQuery = parseInt(alarmNo, 10);
+                    const alarmNoFromPayload = parseInt(currentAlarm?.alarm_no ?? currentAlarm?.alarmno, 10);
+                    const alarmNoInt = Number.isNaN(alarmNoFromQuery) ? alarmNoFromPayload : alarmNoFromQuery;
+                    if (Number.isNaN(alarmNoInt) || alarmNoInt < 0) {
+                        throw new Error(`Invalid alarm number for bitmask: ${alarmNo}`);
+                    }
+
                     const currentChangeValue = alarmNoInt === 0 ? 0 : (1 << (alarmNoInt - 1));
 
                     if (currentChangeValue === 0) {
@@ -172,7 +178,8 @@
                         }
 
                         const existingChanged = await changedReadResponse.json();
-                        const existingMask = Number.isInteger(existingChanged) && existingChanged >= 0 ? existingChanged : 0;
+                        const parsedExistingMask = parseInt(existingChanged, 10);
+                        const existingMask = Number.isNaN(parsedExistingMask) || parsedExistingMask < 0 ? 0 : parsedExistingMask;
                         changedAlarmsValue = existingMask | currentChangeValue;
                     }
                 }
