@@ -71,31 +71,37 @@
         <div id="errorMsg" class="error"></div>
         <div class="timestamp" id="lastUpdated"></div>
     </div>
-    <script>
-        // Set your Firebase Realtime Database URL here (ending with a slash)
-        const FIREBASE_DB_URL = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/";
+<script>
+    const FIREBASE_DB_URL = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/";
 
-        function fetchPingTime() {
-            document.getElementById('errorMsg').textContent = '';
-            fetch(FIREBASE_DB_URL + "Params/pingtime.json")
-                .then(response => {
-                    if (!response.ok) throw new Error("Network response was not ok");
-                    return response.json();
-                })
-                .then(data => {
-                    document.getElementById('pingValue').textContent = data ? data : "No data";
-                    document.getElementById('lastUpdated').textContent = "Last updated: " + new Date().toLocaleTimeString();
-                })
-                .catch(error => {
-                    document.getElementById('pingValue').textContent = "--";
-                    document.getElementById('errorMsg').textContent = "Error fetching ping time: " + error.message;
-                    document.getElementById('lastUpdated').textContent = "";
-                });
-        }
+    function fetchPingTime() {
+        document.getElementById('errorMsg').textContent = '';
 
-        // Initial fetch and auto-refresh every 30 seconds
-        fetchPingTime();
-        setInterval(fetchPingTime, 30000);
-    </script>
+        Promise.all([
+            fetch(FIREBASE_DB_URL + "Params/pingtime.json"),
+            fetch(FIREBASE_DB_URL + "Params/ip.json")
+        ])
+        .then(async ([pingResp, ipResp]) => {
+            if (!pingResp.ok) throw new Error("Ping request failed");
+            if (!ipResp.ok) throw new Error("IP request failed");
+
+            const pingData = await pingResp.json();
+            const ipData = await ipResp.json();
+
+            document.getElementById('pingValue').textContent = pingData ? pingData : "No data";
+            document.getElementById('ipValue').textContent = ipData ? ipData : "No data";
+            document.getElementById('lastUpdated').textContent = "Last updated: " + new Date().toLocaleTimeString();
+        })
+        .catch(error => {
+            document.getElementById('pingValue').textContent = "--";
+            document.getElementById('ipValue').textContent = "--";
+            document.getElementById('errorMsg').textContent = "Error fetching data: " + error.message;
+            document.getElementById('lastUpdated').textContent = "";
+        });
+    }
+
+    fetchPingTime();
+    setInterval(fetchPingTime, 30000);
+</script>
 </body>
 </html>

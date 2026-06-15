@@ -134,17 +134,22 @@ void Display::show(Alarm a, RtcDateTime now, int pressure) {
 void Display::showIPAddress(const char* ipAddress, const char* connStatus, const char* additionalInfo, RtcDateTime now, int pressure) {
     u8g2.firstPage();
     char currenttimestring[10];
+    char currentdatestring[10];
     char pressureString[14];
     char * buffer = formatTime(now);
     strcpy(currenttimestring, buffer);    
+    buffer = formatDate(now);
+    strcpy(currentdatestring, buffer);
     snprintf_P(pressureString, sizeof(pressureString), PSTR("P:%03u"), pressure);
+    
     do {
         u8g2.setFont(u8g2_font_7x13B_mf);
         //u8g2.drawStr(0, 10, "Device IP Address:");
         u8g2.drawStr(0, 10, currenttimestring);
-        u8g2.drawStr(56, 10, pressureString);
+        u8g2.drawStr(0, 23, currentdatestring);
+        u8g2.drawStr(62, 10, pressureString);
         u8g2.setFont(u8g2_font_7x13B_mf);
-        u8g2.drawStr(0, 30, ipAddress);
+        u8g2.drawStr(0, 35, ipAddress);
         u8g2.setFont(u8g2_font_8x13_tr); // Use a smaller font for connection status
         u8g2.setCursor(0, 47); // Adjust Y as needed to appear under IP
         u8g2.print(connStatus);

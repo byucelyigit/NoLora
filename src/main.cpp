@@ -532,8 +532,11 @@ void updatePingTime() {
         snprintf(timeStr, sizeof(timeStr), "%04u-%02u-%02u %02u:%02u:%02u",
             now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second());
         fb.setString("Params/pingtime", String(timeStr));
+        fb.setString("Params/ip", WiFi.localIP().toString());
         Serial.print("Pingtime updated: ");
         Serial.println(timeStr);
+        Serial.print("IP updated: ");
+        Serial.println(WiFi.localIP());
     }
 }
 
