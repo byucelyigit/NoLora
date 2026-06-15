@@ -155,6 +155,19 @@ void printDateTime(const RtcDateTime& dt)
     Serial.print(datestring);
 }
 
+void FirebaseLastRunDate(int alarmNo) {
+    RtcDateTime now = Rtc.GetDateTime();
+
+    char dateStr[11]; // YYYY-MM-DD
+    snprintf(dateStr, sizeof(dateStr), "%04u-%02u-%02u",
+             now.Year(), now.Month(), now.Day());
+
+    String path = "Alarms/Alarm" + String(alarmNo) + "/last_run_date";
+    fb.setString(path, String(dateStr));
+
+    Serial.println("Firebase last_run_date updated: " + path + " = " + String(dateStr));
+}
+
 void logAlarmToFirebase(int alarmNo, const String& message) {
     String logPath = "AlarmLogs/Alarm" + String(alarmNo) + "/Log";
     String timestamp = String(Rtc.GetDateTime().Year()) + "-" +
@@ -195,6 +208,7 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
             case Alarm::AlarmStatus::ALARM_STATUS_STOPPED:
                 relay[rln-1].TurnOff(2);
                 alrm[alarmNo].SaveLastDate(now.Day(), now.Month(), now.Year(), eprom); //normalde bunun alarm nesnesi içinde olması lazım. ama eprom nesnesinin her bir alarma gönderilmesi doğru mu bilemedim. şimdilik böyle kalsın.
+                FirebaseLastRunDate(alarmNo);
                 pushover.sendNotification("Bahçe Sulandı. " + String(rln) + " numaralı vana kapandı.");
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STOPPED");
                 statusString = "STOPPED";
