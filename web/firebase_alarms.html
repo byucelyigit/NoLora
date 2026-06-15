@@ -8,62 +8,108 @@
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 0;
+            padding: 12px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            height: 100vh;
+            justify-content: flex-start;
+            min-height: 100vh;
             background-color: #f4f4f9;
+            box-sizing: border-box;
         }
+
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
         table {
             border-collapse: collapse;
-            width: 90%;
-            max-width: 1200px;
+            width: 100%;
+            min-width: 1100px;
             background: #fff;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
+
         th, td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: center;
+            white-space: nowrap;
         }
+
         th {
             background-color: #007BFF;
             color: white;
         }
+
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+
         tr:hover {
             background-color: #f1f1f1;
+        }
+
+        #paramsContainer {
+            width: 100%;
+            max-width: 1200px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        #paramsContainer p {
+            margin: 8px 0;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 8px;
+            }
+
+            table {
+                min-width: 900px;
+            }
+
+            th, td {
+                padding: 6px;
+                font-size: 12px;
+            }
+
+            #paramsContainer {
+                font-size: 1em;
+            }
         }
     </style>
 </head>
 <body>
-    <table>
-        <thead>
-            <tr>
-                <th>Alarm No</th>
-                <th>Status</th>
-                <th>Frequency</th>
-                <th>Start Time</th>
-                <th>Run Minutes</th>
-                <th>Idle Minutes</th>
-                <th>Repeat Count</th>
-                <th>Remaining Repeat Count</th>
-                <th>Remaining Run Time</th>
-                <th>Remaining Idle Time</th>
-                <th>Last Run Date</th>
-                <th>Relay No</th>
-            </tr>
-        </thead>
-        <tbody id="alarmTableBody">
-            <!-- Rows will be dynamically populated -->
-        </tbody>
-    </table>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Alarm No</th>
+                    <th>Status</th>
+                    <th>Frequency</th>
+                    <th>Start Time</th>
+                    <th>Run Minutes</th>
+                    <th>Idle Minutes</th>
+                    <th>Repeat Count</th>
+                    <th>Remaining Repeat Count</th>
+                    <th>Remaining Run Time</th>
+                    <th>Remaining Idle Time</th>
+                    <th>Last Run Date</th>
+                    <th>Relay No</th>
+                </tr>
+            </thead>
+            <tbody id="alarmTableBody">
+                <!-- Rows will be dynamically populated -->
+            </tbody>
+        </table>
+    </div>
 
-    <div id="paramsContainer" style="margin-top: 20px; text-align: center; font-size: 1.2em;">
+    <div id="paramsContainer">
         <p><strong>Pressure Max:</strong> <span id="pressureMax">Loading...</span></p>
         <p><strong>Pressure Min:</strong> <span id="pressureMin">Loading...</span></p>
         <p><strong>System Time:</strong> <span id="systemTime">Loading...</span></p>
@@ -76,7 +122,7 @@
 
         async function fetchAlarmData() {
             const tableBody = document.getElementById("alarmTableBody");
-            tableBody.innerHTML = ""; // Clear existing rows
+            tableBody.innerHTML = "";
 
             try {
                 const [alarmsResponse, relaysResponse] = await Promise.all([
@@ -162,7 +208,6 @@
         function resolveRelayDescription(relayNo, relays) {
             if (!relays || typeof relays !== "object") return "";
 
-            // UI relay numbering starts at 1, Firebase relay keys start at 0.
             const relayKey = `relay${relayNo - 1}`;
             const relayValue = relays[relayKey];
 
@@ -194,7 +239,6 @@
                 document.getElementById("pressureMin").textContent = params.PressureMin || "N/A";
                 document.getElementById("systemTime").textContent = params.SystemTime || "N/A";
 
-                // Fetch current pressure value
                 const pressureResponse = await fetch(pressureCurrentUrl);
                 if (!pressureResponse.ok) {
                     throw new Error(`Failed to fetch current pressure: ${pressureResponse.statusText}`);
@@ -206,7 +250,6 @@
             }
         }
 
-        // Fetch alarm and params data on page load
         window.onload = () => {
             fetchAlarmData();
             fetchParams();
