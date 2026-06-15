@@ -97,6 +97,7 @@
 
     <script>
         const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Alarms";
+        const firebaseParamsUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Params";
         const urlParams = new URLSearchParams(window.location.search);
         const alarmNo = urlParams.get("alarmNo");
 
@@ -141,6 +142,13 @@
             };
 
             try {
+                const currentAlarmResponse = await fetch(`${firebaseUrl}/${alarmNo}.json`);
+                if (!currentAlarmResponse.ok) {
+                    throw new Error(`Failed to fetch current alarm: ${currentAlarmResponse.statusText}`);
+                }
+                const currentAlarm = await currentAlarmResponse.json();
+                const hasAlarmChanged = Object.keys(updatedAlarm).some((key) => updatedAlarm[key] !== currentAlarm[key]);
+
                 const response = await fetch(`${firebaseUrl}/${alarmNo}.json`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
@@ -149,6 +157,35 @@
                 if (!response.ok) {
                     throw new Error(`Failed to save alarm: ${response.statusText}`);
                 }
+
+                let changedAlarmsValue = -1;
+                if (hasAlarmChanged) {
+                    const alarmNoInt = parseInt(alarmNo, 10);
+                    const currentChangeValue = alarmNoInt === 0 ? 0 : (1 << (alarmNoInt - 1));
+
+                    if (currentChangeValue === 0) {
+                        changedAlarmsValue = 0;
+                    } else {
+                        const changedReadResponse = await fetch(`${firebaseParamsUrl}/ChangedAlarms.json`);
+                        if (!changedReadResponse.ok) {
+                            throw new Error(`Failed to read ChangedAlarms: ${changedReadResponse.statusText}`);
+                        }
+
+                        const existingChanged = await changedReadResponse.json();
+                        const existingMask = Number.isInteger(existingChanged) && existingChanged >= 0 ? existingChanged : 0;
+                        changedAlarmsValue = existingMask | currentChangeValue;
+                    }
+                }
+
+                const changedResponse = await fetch(`${firebaseParamsUrl}/ChangedAlarms.json`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(changedAlarmsValue),
+                });
+                if (!changedResponse.ok) {
+                    throw new Error(`Failed to update ChangedAlarms: ${changedResponse.statusText}`);
+                }
+
                 //alert("Alarm updated successfully!");
                 window.location.href = "firebase_alarms.html";
             } catch (error) {
