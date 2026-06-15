@@ -157,15 +157,18 @@ void printDateTime(const RtcDateTime& dt)
 
 void FirebaseLastRunDate(int alarmNo) {
     RtcDateTime now = Rtc.GetDateTime();
-
     char dateStr[11]; // YYYY-MM-DD
     snprintf(dateStr, sizeof(dateStr), "%04u-%02u-%02u",
              now.Year(), now.Month(), now.Day());
-
     String path = "Alarms/Alarm" + String(alarmNo) + "/last_run_date";
     fb.setString(path, String(dateStr));
-
     Serial.println("Firebase last_run_date updated: " + path + " = " + String(dateStr));
+}
+
+void FirebaseAlarmStatus(int alarmNo, int status) {
+    String path = "Alarms/Alarm" + String(alarmNo) + "/alarm_status";
+    fb.setInt(path, status);
+    Serial.println("Firebase last_run_date updated: " + path + " = " + String(status));
 }
 
 void logAlarmToFirebase(int alarmNo, const String& message) {
@@ -204,6 +207,7 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
                 snprintf(time_format_buffer, sizeof(time_format_buffer), "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
                 pushover.sendNotification("Bahçe Sulama Başladı. " + String(rln) + " numaralı vana açıldı. Sistem saati: " + String(time_format_buffer) + " Beklenen görev süresi: " + String(alrm[alarmNo].repeat_count * (alrm[alarmNo].run_minutes + alrm[alarmNo].idle_minutes)) + " dakika. Görev No: " + String(alarmNo));
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STARTED" + "Relay No:" + String(rln));
+                FirebaseAlarmStatus(alarmNo, 1);
                 break;
             case Alarm::AlarmStatus::ALARM_STATUS_STOPPED:
                 relay[rln-1].TurnOff(2);
@@ -211,6 +215,7 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
                 FirebaseLastRunDate(alarmNo);
                 pushover.sendNotification("Bahçe Sulandı. " + String(rln) + " numaralı vana kapandı.");
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STOPPED");
+                FirebaseAlarmStatus(alarmNo, 0);
                 statusString = "STOPPED";
                 break;
             case Alarm::AlarmStatus::ALARM_STATUS_WAITING:
@@ -572,8 +577,6 @@ void updateRelaysFromFirebase() {
         http.end(); // Close the connection
     }
 }
-
-
 
 void checkWiFiReconnect() {
     static unsigned long lastAttempt = 0;
