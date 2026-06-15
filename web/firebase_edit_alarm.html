@@ -141,6 +141,21 @@
                 relay_no: parseInt(document.getElementById("relayNo").value),
             };
 
+            const resolveAlarmNumber = (rawAlarmNo, alarmPayload) => {
+                const direct = parseInt(rawAlarmNo, 10);
+                if (!Number.isNaN(direct)) return direct;
+
+                const text = String(rawAlarmNo || "");
+                const digitsMatch = text.match(/\d+/);
+                if (digitsMatch) {
+                    const fromKey = parseInt(digitsMatch[0], 10);
+                    if (!Number.isNaN(fromKey)) return fromKey;
+                }
+
+                const payloadNumber = parseInt(alarmPayload?.alarm_no ?? alarmPayload?.alarmno, 10);
+                return Number.isNaN(payloadNumber) ? NaN : payloadNumber;
+            };
+
             try {
                 const currentAlarmResponse = await fetch(`${firebaseUrl}/${alarmNo}.json`);
                 if (!currentAlarmResponse.ok) {
@@ -158,16 +173,15 @@
                     throw new Error(`Failed to save alarm: ${response.statusText}`);
                 }
 
-                let changedAlarmsValue = -1;
+                // Web UI never writes -1; ESP32 is responsible for resetting ChangedAlarms to -1.
                 if (hasAlarmChanged) {
-                    const alarmNoFromQuery = parseInt(alarmNo, 10);
-                    const alarmNoFromPayload = parseInt(currentAlarm?.alarm_no ?? currentAlarm?.alarmno, 10);
-                    const alarmNoInt = Number.isNaN(alarmNoFromQuery) ? alarmNoFromPayload : alarmNoFromQuery;
+                    const alarmNoInt = resolveAlarmNumber(alarmNo, currentAlarm);
                     if (Number.isNaN(alarmNoInt) || alarmNoInt < 0) {
                         throw new Error(`Invalid alarm number for bitmask: ${alarmNo}`);
                     }
 
                     const currentChangeValue = alarmNoInt === 0 ? 0 : (1 << (alarmNoInt - 1));
+                    let changedAlarmsValue = 0;
 
                     if (currentChangeValue === 0) {
                         changedAlarmsValue = 0;
@@ -182,15 +196,15 @@
                         const existingMask = Number.isNaN(parsedExistingMask) || parsedExistingMask < 0 ? 0 : parsedExistingMask;
                         changedAlarmsValue = existingMask | currentChangeValue;
                     }
-                }
 
-                const changedResponse = await fetch(`${firebaseParamsUrl}/ChangedAlarms.json`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(changedAlarmsValue),
-                });
-                if (!changedResponse.ok) {
-                    throw new Error(`Failed to update ChangedAlarms: ${changedResponse.statusText}`);
+                    const changedResponse = await fetch(`${firebaseParamsUrl}/ChangedAlarms.json`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(changedAlarmsValue),
+                    });
+                    if (!changedResponse.ok) {
+                        throw new Error(`Failed to update ChangedAlarms: ${changedResponse.statusText}`);
+                    }
                 }
 
                 //alert("Alarm updated successfully!");
