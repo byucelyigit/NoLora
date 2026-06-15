@@ -476,11 +476,61 @@ void syncAllAlarmsFromFirebase() {
     Serial.println("syncAllAlarmsFromFirebase: synced " + String(syncedCount) + "/" + String(ALARM_COUNT) + " alarms.");
 }
 
+void UpdateAlarmParametersFromFireBase() {
+    static unsigned long lastCheck = 0;
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastCheck < 30000) {
+        return;
+    }
+    lastCheck = currentMillis;
+
+    if (WiFi.status() != WL_CONNECTED) {
+        return;
+    }
+
+    int changedAlarms = fb.getInt("Params/ChangedAlarms");
+    if (changedAlarms == -1) {
+        return;
+    }
+
+    int requestedCount = 0;
+    int successCount = 0;
+
+    if (changedAlarms == 0) {
+        requestedCount = 1;
+        if (syncAlarmFromFirebase(0)) {
+            successCount++;
+        }
+    } else if (changedAlarms > 0) {
+        // Bit mapping: alarm1->bit0, alarm2->bit1, ..., alarmN->bit(N-1).
+        for (int alarmNo = 1; alarmNo < ALARM_COUNT; alarmNo++) {
+            int bitMask = (1 << (alarmNo - 1));
+            if (changedAlarms & bitMask) {
+                requestedCount++;
+                if (syncAlarmFromFirebase(alarmNo)) {
+                    successCount++;
+                }
+            }
+        }
+    } else {
+        Serial.println("UpdateAlarmParametersFromFireBase: invalid ChangedAlarms value: " + String(changedAlarms));
+        return;
+    }
+
+    if (requestedCount > 0 && requestedCount == successCount) {
+        fb.setInt("Params/ChangedAlarms", -1);
+        Serial.println("UpdateAlarmParametersFromFireBase: sync complete, ChangedAlarms reset to -1");
+    } else if (requestedCount > 0) {
+        Serial.println("UpdateAlarmParametersFromFireBase: partial sync " + String(successCount) + "/" + String(requestedCount));
+    }
+}
+
 void updateRelaysFromFirebase() {
     static unsigned long lastFirebaseCheck = 0;
     unsigned long currentMillis = millis();
 
-    if (currentMillis - lastFirebaseCheck >= 3000) { // Check every 3 seconds
+    if (currentMillis - lastFirebaseCheck >= 5000) { // Check every 5 seconds
         lastFirebaseCheck = currentMillis;
 
         // Perform asynchronous HTTP GET request to fetch relay status
@@ -826,6 +876,7 @@ void loop() {
     }
 
     updateRelaysFromFirebase();
+    UpdateAlarmParametersFromFireBase();
     updatePingTime();
     server.handleClient();
 }
