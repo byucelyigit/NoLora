@@ -72,17 +72,27 @@
 
     <script>
         const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Alarms.json";
+        const relaysUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/relays.json";
 
         async function fetchAlarmData() {
             const tableBody = document.getElementById("alarmTableBody");
             tableBody.innerHTML = ""; // Clear existing rows
 
             try {
-                const response = await fetch(firebaseUrl);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch alarms: ${response.statusText}`);
+                const [alarmsResponse, relaysResponse] = await Promise.all([
+                    fetch(firebaseUrl),
+                    fetch(relaysUrl)
+                ]);
+
+                if (!alarmsResponse.ok) {
+                    throw new Error(`Failed to fetch alarms: ${alarmsResponse.statusText}`);
                 }
-                const alarms = await response.json();
+                if (!relaysResponse.ok) {
+                    throw new Error(`Failed to fetch relays: ${relaysResponse.statusText}`);
+                }
+
+                const alarms = await alarmsResponse.json();
+                const relays = await relaysResponse.json();
 
                 for (const [alarmNo, alarm] of Object.entries(alarms)) {
                     const row = document.createElement("tr");
@@ -98,7 +108,7 @@
                         <td>${alarm.run_remaining_minutes || "N/A"} min</td>
                         <td>${alarm.idle_remaining_minutes || "N/A"} min</td>
                         <td>${formatDate(alarm.last_run_date)}</td>
-                        <td>${alarm.relay_no || "N/A"}</td>
+                        <td>${formatRelayDisplay(alarm.relay_no, relays)}</td>
                     `;
                     row.addEventListener("click", () => {
                         window.location.href = `firebase_edit_alarm.html?alarmNo=${alarmNo}`;
@@ -106,7 +116,7 @@
                     tableBody.appendChild(row);
                 }
             } catch (error) {
-                console.error("Error fetching alarms:", error);
+                console.error("Error fetching alarms/relays:", error);
             }
         }
 
@@ -137,6 +147,36 @@
             if (!lastRunDate) return "N/A";
             const [year, month, day] = lastRunDate.split("-");
             return `${day}/${month}/${year}`;
+        }
+
+        function formatRelayDisplay(relayNo, relays) {
+            if (relayNo === undefined || relayNo === null) return "N/A";
+
+            const relayNoInt = parseInt(relayNo, 10);
+            if (Number.isNaN(relayNoInt)) return String(relayNo);
+
+            const description = resolveRelayDescription(relayNoInt, relays);
+            return description ? `${relayNoInt} (${description})` : String(relayNoInt);
+        }
+
+        function resolveRelayDescription(relayNo, relays) {
+            if (!relays || typeof relays !== "object") return "";
+
+            const directKey = `relay${relayNo}`;
+            const minusOneKey = `relay${relayNo - 1}`;
+            const relayValue = relays[directKey] ?? relays[minusOneKey];
+
+            if (relayValue === undefined || relayValue === null) return "";
+
+            if (typeof relayValue === "string" || typeof relayValue === "number" || typeof relayValue === "boolean") {
+                return String(relayValue);
+            }
+
+            if (typeof relayValue === "object") {
+                return relayValue.name || relayValue.label || relayValue.description || relayValue.title || "";
+            }
+
+            return "";
         }
 
         async function fetchParams() {
