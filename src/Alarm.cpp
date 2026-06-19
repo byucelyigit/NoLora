@@ -173,10 +173,10 @@ void Alarm::RunCycle(RtcDateTime rtc)
     long rtcTotalMinutes;
     long timeDifferenceMinutes;
     //Serial.println("Alarm::RunCycle");
-    if((clockMin==alarm_minute) && (clockHr == alarm_hour))
+    if((clockMin==alarm_minute) && (clockHr == alarm_hour) && (alarm_status == Alarm::AlarmStatus::ALARM_STATUS_STOPPED))
     {
         taskStatus = true;
-        //Serial.println("Alarm::Update:isTrigger");
+        Serial.println("Alarm::Update:isTrigger");
         alarm_status = Alarm::AlarmStatus::ALARM_STATUS_RUNNING;
         alarm_start_time = RtcDateTime(rtc.Year(), rtc.Month(), rtc.Day(), alarm_hour, alarm_minute, 0);  
         rtcAlarmStartTotalMinutes = calculateTotalMinutes(alarm_start_time);
