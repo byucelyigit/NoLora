@@ -72,11 +72,20 @@ bool alarmsynced = false;
 // sure bütçesiyle gönderiyoruz (fail-open: hata olursa drop + sayaç).
 
 #define FB_QUEUE_SIZE 16
+#define FB_QUEUE_FLUSH_BUDGET_MS 250
+#define FB_WRITE_MAX_AGE_MS 15000
+
+enum FbWriteKind : uint8_t {
+    FB_WRITE_SET_STRING = 0,
+    FB_WRITE_SET_INT = 1,
+    FB_WRITE_PUSH_STRING = 2,
+};
 
 struct FbWriteItem {
     char path[64];
     char value[48];
-    bool isInt;   // true: setInt kullan, false: pushString kullan
+    FbWriteKind kind;
+    unsigned long enqueuedAt;
 };
 
 FbWriteItem fbQueue[FB_QUEUE_SIZE];
@@ -86,47 +95,78 @@ uint16_t fbDropCount = 0;
 uint16_t fbErrorCount = 0;
 uint16_t fbSuccessCount = 0;
 
-bool fbQueueEnqueue(const char* path, const char* value, bool isInt) {
+bool fbQueueEnqueue(FbWriteKind kind, const char* path, const char* value) {
     uint8_t next = (fbQueueTail + 1) % FB_QUEUE_SIZE;
     if (next == fbQueueHead) {
         fbDropCount++;
-        Serial.println("[FB] Queue full — drop: " + String(path));
+        Serial.println("[FB] Queue full - drop: " + String(path));
         return false;
     }
-    strncpy(fbQueue[fbQueueTail].path,  path,  sizeof(fbQueue[0].path)  - 1);
+    strncpy(fbQueue[fbQueueTail].path, path, sizeof(fbQueue[0].path) - 1);
     strncpy(fbQueue[fbQueueTail].value, value, sizeof(fbQueue[0].value) - 1);
-    fbQueue[fbQueueTail].path[sizeof(fbQueue[0].path)   - 1] = '\0';
+    fbQueue[fbQueueTail].path[sizeof(fbQueue[0].path) - 1] = '\0';
     fbQueue[fbQueueTail].value[sizeof(fbQueue[0].value) - 1] = '\0';
-    fbQueue[fbQueueTail].isInt = isInt;
+    fbQueue[fbQueueTail].kind = kind;
+    fbQueue[fbQueueTail].enqueuedAt = millis();
     fbQueueTail = next;
     return true;
 }
 
-// Her loop() cagrisinda en fazla FB_FLUSH_PER_LOOP adet yazimi dener.
-#define FB_FLUSH_PER_LOOP 2
+bool fbQueueEnqueueString(const char* path, const String& value) {
+    char buffer[48];
+    value.toCharArray(buffer, sizeof(buffer));
+    return fbQueueEnqueue(FB_WRITE_SET_STRING, path, buffer);
+}
 
-// fbQueueFlush, fb nesnesine erisir — asagida tanimli, burada forward bildirimi yeterli
+bool fbQueueEnqueueInt(const char* path, int value) {
+    char buffer[48];
+    snprintf(buffer, sizeof(buffer), "%d", value);
+    return fbQueueEnqueue(FB_WRITE_SET_INT, path, buffer);
+}
+
+bool fbQueueEnqueuePushString(const char* path, const String& value) {
+    char buffer[48];
+    value.toCharArray(buffer, sizeof(buffer));
+    return fbQueueEnqueue(FB_WRITE_PUSH_STRING, path, buffer);
+}
+
+// Her loop() cagrisinda en fazla bu kadar zaman harcanir.
 extern Firebase fb;
 
 void fbQueueFlush() {
     if (WiFi.status() != WL_CONNECTED) return;
-    int flushed = 0;
-    while (fbQueueHead != fbQueueTail && flushed < FB_FLUSH_PER_LOOP) {
+
+    unsigned long flushStart = millis();
+    while (fbQueueHead != fbQueueTail) {
+        if (millis() - flushStart >= FB_QUEUE_FLUSH_BUDGET_MS) {
+            break;
+        }
+
         FbWriteItem& item = fbQueue[fbQueueHead];
+        if (millis() - item.enqueuedAt > FB_WRITE_MAX_AGE_MS) {
+            fbDropCount++;
+            Serial.println("[FB] Drop stale write: " + String(item.path));
+            fbQueueHead = (fbQueueHead + 1) % FB_QUEUE_SIZE;
+            continue;
+        }
+
         int rc = -1;
-        if (item.isInt) {
+        if (item.kind == FB_WRITE_SET_INT) {
             rc = fb.setInt(String(item.path), String(item.value).toInt());
+        } else if (item.kind == FB_WRITE_SET_STRING) {
+            rc = fb.setString(String(item.path), String(item.value));
         } else {
             rc = fb.pushString(String(item.path), String(item.value));
         }
+
         if (rc == 200) {
             fbSuccessCount++;
         } else {
             fbErrorCount++;
             Serial.println("[FB] Write failed rc=" + String(rc) + " path=" + String(item.path));
         }
+
         fbQueueHead = (fbQueueHead + 1) % FB_QUEUE_SIZE;
-        flushed++;
     }
 }
 // -----------------------------------------------------------------------
@@ -220,20 +260,18 @@ void printDateTime(const RtcDateTime& dt)
     Serial.print(datestring);
 }
 
-// Faz 1: Tek tip Firebase yazma sarmalayicisi — dönüs kodu kontrol edilir,
-// basarili/basarisiz durum Serial'a yazilir. Hata varsa false döner.
+// Faz 1: Firebase yazimlarini dogrudan gondermek yerine kuyruga birakir.
+// Donus degeri enqueue basarisi; gercek yazim loop() icindeki flush ile olur.
 static bool fbSetStringChecked(const String& path, const String& value, const char* tag = "") {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[FB] Skip (no WiFi): " + path);
         return false;
     }
-    int rc = fb.setString(path, value);
-    if (rc == 200) {
-        Serial.println("[FB] OK setString " + String(tag) + " " + path + "=" + value);
-        return true;
+    bool queued = fbQueueEnqueueString(path.c_str(), value);
+    if (queued) {
+        Serial.println("[FB] Queued setString " + String(tag) + " " + path + "=" + value);
     }
-    Serial.println("[FB] ERR setString rc=" + String(rc) + " " + String(tag) + " " + path);
-    return false;
+    return queued;
 }
 
 static bool fbSetIntChecked(const String& path, int value, const char* tag = "") {
@@ -241,13 +279,11 @@ static bool fbSetIntChecked(const String& path, int value, const char* tag = "")
         Serial.println("[FB] Skip (no WiFi): " + path);
         return false;
     }
-    int rc = fb.setInt(path, value);
-    if (rc == 200) {
-        Serial.println("[FB] OK setInt " + String(tag) + " " + path + "=" + String(value));
-        return true;
+    bool queued = fbQueueEnqueueInt(path.c_str(), value);
+    if (queued) {
+        Serial.println("[FB] Queued setInt " + String(tag) + " " + path + "=" + String(value));
     }
-    Serial.println("[FB] ERR setInt rc=" + String(rc) + " " + String(tag) + " " + path);
-    return false;
+    return queued;
 }
 
 void FirebaseLastRunDate(int alarmNo) {
@@ -276,7 +312,7 @@ void logAlarmToFirebase(int alarmNo, const String& message) {
     char pathBuf[64]; char valBuf[48];
     logPath.toCharArray(pathBuf, sizeof(pathBuf));
     logMessage.toCharArray(valBuf, sizeof(valBuf));
-    fbQueueEnqueue(pathBuf, valBuf, false);
+    fbQueueEnqueuePushString(pathBuf, logMessage);
     Serial.println("[FB] Queued log: " + logMessage);
 }
 
@@ -343,7 +379,7 @@ void onRelayStateChange(int relayNo, bool isOn, int reason) {
     char logPathBuf[64]; char logValBuf[48];
     logPath.toCharArray(logPathBuf, sizeof(logPathBuf));
     logMessage.toCharArray(logValBuf, sizeof(logValBuf));
-    fbQueueEnqueue(logPathBuf, logValBuf, false);
+    fbQueueEnqueuePushString(logPathBuf, logMessage);
     Serial.println("[FB] Queued relay log: " + logMessage);
 
     // Faz 1+3: relays/status güncellemesi — geçersiz değer (<=0) koruması ile
