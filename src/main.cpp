@@ -66,6 +66,71 @@ long lastPingUpdate = 0;
 
 bool alarmsynced = false;
 
+// ---- Firebase Write Queue (Faz 2) ------------------------------------
+// Callback fonksiyonlari icinde dogrudan Firebase yazimi loop'u bloklayabilir.
+// Bunun yerine yazimlari RAM'daki kuyruğa bırakıp loop() icerisinde kisa
+// sure bütçesiyle gönderiyoruz (fail-open: hata olursa drop + sayaç).
+
+#define FB_QUEUE_SIZE 16
+
+struct FbWriteItem {
+    char path[64];
+    char value[48];
+    bool isInt;   // true: setInt kullan, false: pushString kullan
+};
+
+FbWriteItem fbQueue[FB_QUEUE_SIZE];
+volatile uint8_t fbQueueHead = 0;
+volatile uint8_t fbQueueTail = 0;
+uint16_t fbDropCount = 0;
+uint16_t fbErrorCount = 0;
+uint16_t fbSuccessCount = 0;
+
+bool fbQueueEnqueue(const char* path, const char* value, bool isInt) {
+    uint8_t next = (fbQueueTail + 1) % FB_QUEUE_SIZE;
+    if (next == fbQueueHead) {
+        fbDropCount++;
+        Serial.println("[FB] Queue full — drop: " + String(path));
+        return false;
+    }
+    strncpy(fbQueue[fbQueueTail].path,  path,  sizeof(fbQueue[0].path)  - 1);
+    strncpy(fbQueue[fbQueueTail].value, value, sizeof(fbQueue[0].value) - 1);
+    fbQueue[fbQueueTail].path[sizeof(fbQueue[0].path)   - 1] = '\0';
+    fbQueue[fbQueueTail].value[sizeof(fbQueue[0].value) - 1] = '\0';
+    fbQueue[fbQueueTail].isInt = isInt;
+    fbQueueTail = next;
+    return true;
+}
+
+// Her loop() cagrisinda en fazla FB_FLUSH_PER_LOOP adet yazimi dener.
+#define FB_FLUSH_PER_LOOP 2
+
+// fbQueueFlush, fb nesnesine erisir — asagida tanimli, burada forward bildirimi yeterli
+extern Firebase fb;
+
+void fbQueueFlush() {
+    if (WiFi.status() != WL_CONNECTED) return;
+    int flushed = 0;
+    while (fbQueueHead != fbQueueTail && flushed < FB_FLUSH_PER_LOOP) {
+        FbWriteItem& item = fbQueue[fbQueueHead];
+        int rc = -1;
+        if (item.isInt) {
+            rc = fb.setInt(String(item.path), String(item.value).toInt());
+        } else {
+            rc = fb.pushString(String(item.path), String(item.value));
+        }
+        if (rc == 200) {
+            fbSuccessCount++;
+        } else {
+            fbErrorCount++;
+            Serial.println("[FB] Write failed rc=" + String(rc) + " path=" + String(item.path));
+        }
+        fbQueueHead = (fbQueueHead + 1) % FB_QUEUE_SIZE;
+        flushed++;
+    }
+}
+// -----------------------------------------------------------------------
+
 char time_format_buffer[10] = "00:00:00"; 
 char date_format_buffer[10] = "00/00/00"; 
 
@@ -155,33 +220,64 @@ void printDateTime(const RtcDateTime& dt)
     Serial.print(datestring);
 }
 
+// Faz 1: Tek tip Firebase yazma sarmalayicisi — dönüs kodu kontrol edilir,
+// basarili/basarisiz durum Serial'a yazilir. Hata varsa false döner.
+static bool fbSetStringChecked(const String& path, const String& value, const char* tag = "") {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[FB] Skip (no WiFi): " + path);
+        return false;
+    }
+    int rc = fb.setString(path, value);
+    if (rc == 200) {
+        Serial.println("[FB] OK setString " + String(tag) + " " + path + "=" + value);
+        return true;
+    }
+    Serial.println("[FB] ERR setString rc=" + String(rc) + " " + String(tag) + " " + path);
+    return false;
+}
+
+static bool fbSetIntChecked(const String& path, int value, const char* tag = "") {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[FB] Skip (no WiFi): " + path);
+        return false;
+    }
+    int rc = fb.setInt(path, value);
+    if (rc == 200) {
+        Serial.println("[FB] OK setInt " + String(tag) + " " + path + "=" + String(value));
+        return true;
+    }
+    Serial.println("[FB] ERR setInt rc=" + String(rc) + " " + String(tag) + " " + path);
+    return false;
+}
+
 void FirebaseLastRunDate(int alarmNo) {
     RtcDateTime now = Rtc.GetDateTime();
     char dateStr[11]; // YYYY-MM-DD
     snprintf(dateStr, sizeof(dateStr), "%04u-%02u-%02u",
              now.Year(), now.Month(), now.Day());
     String path = "Alarms/Alarm" + String(alarmNo) + "/last_run_date";
-    fb.setString(path, String(dateStr));
-    Serial.println("Firebase last_run_date updated: " + path + " = " + String(dateStr));
+    fbSetStringChecked(path, String(dateStr), "last_run_date");
 }
 
 void FirebaseAlarmStatus(int alarmNo, int status) {
     String path = "Alarms/Alarm" + String(alarmNo) + "/alarm_status";
-    fb.setInt(path, status);
-    Serial.println("Firebase last_run_date updated: " + path + " = " + String(status));
+    fbSetIntChecked(path, status, "alarm_status");
 }
 
+// Faz 2: logAlarmToFirebase kuyruğa yazar (callback bloğu engellemez)
 void logAlarmToFirebase(int alarmNo, const String& message) {
     String logPath = "AlarmLogs/Alarm" + String(alarmNo) + "/Log";
-    String timestamp = String(Rtc.GetDateTime().Year()) + "-" +
-                       String(Rtc.GetDateTime().Month()) + "-" +
-                       String(Rtc.GetDateTime().Day()) + " " +
-                       String(Rtc.GetDateTime().Hour()) + ":" +
-                       String(Rtc.GetDateTime().Minute()) + ":" +
-                       String(Rtc.GetDateTime().Second());
-    String logMessage = "[" + timestamp + "] " + message;
-    fb.pushString(logPath, logMessage);
-    Serial.println("Logged to Firebase: " + logMessage);
+    RtcDateTime dt = Rtc.GetDateTime();
+    char timestamp[20];
+    snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
+             dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second());
+    String logMessage = "[" + String(timestamp) + "] " + message;
+    // Kuyruga bırak — loop() icerisinde flush edilecek
+    char pathBuf[64]; char valBuf[48];
+    logPath.toCharArray(pathBuf, sizeof(pathBuf));
+    logMessage.toCharArray(valBuf, sizeof(valBuf));
+    fbQueueEnqueue(pathBuf, valBuf, false);
+    Serial.println("[FB] Queued log: " + logMessage);
 }
 
 void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected type
@@ -243,17 +339,28 @@ void onRelayStateChange(int relayNo, bool isOn, int reason) {
                        String(Rtc.GetDateTime().Minute()) + ":" +
                        String(Rtc.GetDateTime().Second());
     String logMessage = "[" + timestamp + "] Relay " + String(relayNo) + " turned " + state + " (Reason: " + String(reason) + ")";
-    fb.pushString(logPath, logMessage);
-    Serial.println("Logged to Firebase: " + logMessage);
+    // Faz 2: relay logu kuyruğa bırak — bloklamaz
+    char logPathBuf[64]; char logValBuf[48];
+    logPath.toCharArray(logPathBuf, sizeof(logPathBuf));
+    logMessage.toCharArray(logValBuf, sizeof(logValBuf));
+    fbQueueEnqueue(logPathBuf, logValBuf, false);
+    Serial.println("[FB] Queued relay log: " + logMessage);
 
-    // Update Firebase relays/status value
-    int relayStatus = fb.getInt("relays/status"); // Get current relay status
-    if (isOn) {
-        relayStatus |= (1 << (relayNo)); // Set the bit for the relay
-    } else {
-        relayStatus &= ~(1 << (relayNo)); // Clear the bit for the relay
+    // Faz 1+3: relays/status güncellemesi — geçersiz değer (<=0) koruması ile
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[FB] relays/status skip (no WiFi)");
+        return;
     }
-    fb.setInt("relays/status", relayStatus);
+    // Kutuphanenin getInt(path) tek arguman döner, 0 hem gecersiz hem de gecerli deger olabilir;
+    // WiFi kontrolunu yukarida yaptik, bu noktada bagliyz demek.
+    int relayStatusVal = fb.getInt("relays/status");
+    if (relayStatusVal < 0) relayStatusVal = 0; // Faz 1 bug fix: gecersiz deger koruması
+    if (isOn) {
+        relayStatusVal |= (1 << relayNo);
+    } else {
+        relayStatusVal &= ~(1 << relayNo);
+    }
+    fbSetIntChecked("relays/status", relayStatusVal, "relay_status");
 }
 
 void handleAlarmJson() {
@@ -445,6 +552,7 @@ bool syncAlarmFromFirebase(int alarmNo) {
 
     HTTPClient alarmHttp;
     String alarmUrl = REFERENCE_URL + "Alarms/Alarm" + String(alarmNo) + ".json";
+    alarmHttp.setTimeout(6000); // Faz 1: timeout siniri
     alarmHttp.begin(alarmUrl);
     int httpCode = alarmHttp.GET();
 
@@ -508,6 +616,8 @@ void UpdateAlarmParametersFromFireBase() {
         return;
     }
 
+    // Faz 3: WiFi korumalı getInt — kütüphane tek argüman döner (0 hem hata hem geçerli olabilir)
+    if (WiFi.status() != WL_CONNECTED) return;
     int changedAlarms = fb.getInt("Params/ChangedAlarms");
     if (changedAlarms == -1) {
         return;
@@ -538,8 +648,8 @@ void UpdateAlarmParametersFromFireBase() {
     }
 
     if (requestedCount > 0 && requestedCount == successCount) {
-        fb.setInt("Params/ChangedAlarms", -1);
-        Serial.println("UpdateAlarmParametersFromFireBase: sync complete, ChangedAlarms reset to -1");
+        fbSetIntChecked("Params/ChangedAlarms", -1, "ChangedAlarms_reset");
+        Serial.println("[FB] UpdateAlarmParameters: sync complete, ChangedAlarms reset to -1");
     } else if (requestedCount > 0) {
         Serial.println("UpdateAlarmParametersFromFireBase: partial sync " + String(successCount) + "/" + String(requestedCount));
     }
@@ -552,7 +662,8 @@ void updateRelaysFromFirebase() {
     if (currentMillis - lastFirebaseCheck >= 5000) { // Check every 5 seconds
         lastFirebaseCheck = currentMillis;
 
-        // Perform asynchronous HTTP GET request to fetch relay status
+        // Faz 1: timeout siniri — uzun beklemeyi önler
+        http.setTimeout(6000);
         http.begin(REFERENCE_URL + "relays/status.json"); // Firebase REST API endpoint
         int httpCode = http.GET();
 
@@ -594,16 +705,16 @@ void updatePingTime() {
     long currentMillis = millis();
     if (currentMillis - lastPingUpdate >= 30000) {
         lastPingUpdate = currentMillis;
+        if (WiFi.status() != WL_CONNECTED) {
+            Serial.println("[FB] updatePingTime skip (no WiFi)");
+            return;
+        }
         RtcDateTime now = Rtc.GetDateTime();
         char timeStr[20];
         snprintf(timeStr, sizeof(timeStr), "%04u-%02u-%02u %02u:%02u:%02u",
             now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second());
-        fb.setString("Params/pingtime", String(timeStr));
-        fb.setString("Params/ip", WiFi.localIP().toString());
-        Serial.print("Pingtime updated: ");
-        Serial.println(timeStr);
-        Serial.print("IP updated: ");
-        Serial.println(WiFi.localIP());
+        fbSetStringChecked("Params/pingtime", String(timeStr), "pingtime");
+        fbSetStringChecked("Params/ip", WiFi.localIP().toString(), "ip");
     }
 }
 
@@ -835,12 +946,15 @@ void loop() {
             ipAddress = WiFi.localIP().toString();
             long rssi = WiFi.RSSI();
             additionalInfo = "RSSI: " + String(rssi);
-            if(!alarmsynced) {
-                   syncAlarmFromFirebase(0);
-                   syncAlarmFromFirebase(1);
-                   syncAlarmFromFirebase(2);
-                   syncAlarmFromFirebase(3);
+            // Faz 2: İlk baglantida tek seferlik sync (loop blogu degil — sadece bir kez calisir)
+            if (!alarmsynced) {
+                Serial.println("[FB] First-connect alarm sync start");
+                syncAlarmFromFirebase(0);
+                syncAlarmFromFirebase(1);
+                syncAlarmFromFirebase(2);
+                syncAlarmFromFirebase(3);
                 alarmsynced = true;
+                Serial.println("[FB] First-connect alarm sync done");
             }
             display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str(), now, pressureValue);
         }
@@ -895,5 +1009,7 @@ void loop() {
     updateRelaysFromFirebase();
     UpdateAlarmParametersFromFireBase();
     updatePingTime();
+    // Faz 2: Kuyrukta bekleyen Firebase yazimlarini kisa sure bütçesiyle gönder
+    fbQueueFlush();
     server.handleClient();
 }
