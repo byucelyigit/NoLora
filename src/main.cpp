@@ -707,8 +707,19 @@ void updateRelaysFromFirebase() {
             String payload = http.getString();
             int relayStatus = payload.toInt(); // Parse the relay status as an integer
             if (relayStatus >= 0) { // Ensure a valid value is retrieved
-                for (int i = 0; i < RELAY_COUNT; i++) {
-                    if (relayStatus & (1 << i)) { // Check if the bit is set
+            for (int i = 0; i < RELAY_COUNT; i++) {
+                // Eğer bu röleyi kullanan aktif bir alarm varsa Firebase'i görmezden gel
+                bool alarmActive = false;
+                for (int a = 0; a < ALARM_COUNT; a++) {
+                    if (alrm[a].relay_no == (i + 1) && 
+                        alrm[a].alarm_status != Alarm::AlarmStatus::ALARM_STATUS_STOPPED) {
+                        alarmActive = true;
+                        break;
+                    }
+                }
+                    if (alarmActive) continue;  // Bu röleye dokunma
+
+                    if (relayStatus & (1 << i)) {
                         relay[i].TurnOn(6);
                     } else {
                         relay[i].TurnOff(7);
