@@ -46,6 +46,46 @@
             margin-top: 20px;
             border: 1px solid #ddd;
         }
+
+        .connection-bar {
+            width: 90%;
+            max-width: 1200px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+            padding: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .connection-bar label {
+            font-weight: bold;
+        }
+
+        .connection-bar input {
+            flex: 1;
+            min-width: 180px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .connection-bar button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007BFF;
+            color: white;
+            cursor: pointer;
+        }
+
+        .connection-bar button:hover {
+            background-color: #0056b3;
+        }        
     </style>
 </head>
 <body>
@@ -53,6 +93,11 @@
         <h1>Task List</h1>
         <p id="systemTime">Loading system time...</p>
     </div>
+    <div class="connection-bar">
+        <label for="deviceIP">Device IP</label>
+        <input type="text" id="deviceIP" placeholder="192.168.1.213">
+        <button type="button" id="saveIPButton">Save IP</button>
+    </div>    
     <table>
         <thead>
             <tr>
@@ -77,12 +122,34 @@
 
     <div id="pressureGraph"></div>
 
-    <script>
-        const DEVICE_IP = "192.168.1.213";
+        <script>
+        const deviceIPInput = document.getElementById("deviceIP");
+        const saveIPButton = document.getElementById("saveIPButton");
+
+        function loadDeviceIP() {
+            const savedIP = localStorage.getItem("deviceIP");
+            deviceIPInput.value = savedIP && savedIP.trim() ? savedIP : "192.168.1.213";
+        }
+
+        function saveDeviceIP() {
+            localStorage.setItem("deviceIP", deviceIPInput.value.trim());
+        }
+
+        function getBaseURL() {
+            return `http://${deviceIPInput.value.trim()}`;
+        }
+
+        saveIPButton.addEventListener("click", () => {
+            saveDeviceIP();
+            fetchSystemTime();
+            fetchAlarmData();
+        });
+
+        deviceIPInput.addEventListener("change", saveDeviceIP);
 
         async function fetchSystemTime() {
             try {
-                const response = await fetch(`http://${DEVICE_IP}/rtc`);
+                const response = await fetch(`${getBaseURL()}/rtc`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch system time: ${response.statusText}`);
                 }
@@ -96,11 +163,11 @@
 
         async function fetchAlarmData() {
             const tableBody = document.getElementById("alarmTableBody");
-            tableBody.innerHTML = ""; // Clear existing rows
+            tableBody.innerHTML = "";
 
             for (let alarmNo = 0; alarmNo < 8; alarmNo++) {
                 try {
-                    const response = await fetch(`http://${DEVICE_IP}/alarm?alarmNo=${alarmNo}`);
+                    const response = await fetch(`${getBaseURL()}/alarm?alarmNo=${alarmNo}`);
                     if (!response.ok) {
                         throw new Error(`Failed to fetch alarm ${alarmNo}: ${response.statusText}`);
                     }
@@ -115,9 +182,9 @@
                         <td>${alarm.run_minutes}</td>
                         <td>${alarm.idle_minutes}</td>
                         <td>${alarm.repeat_count}</td>
-                        <td>${alarm.repeat_count_remaining}</td> <!-- New data -->
-                        <td>${alarm.run_remaining_minutes} min</td> <!-- New data -->
-                        <td>${alarm.idle_remaining_minutes} min</td> <!-- New data -->
+                        <td>${alarm.repeat_count_remaining}</td>
+                        <td>${alarm.run_remaining_minutes} min</td>
+                        <td>${alarm.idle_remaining_minutes} min</td>
                         <td>${formatDate(alarm.last_run_day, alarm.last_run_month, alarm.last_run_year)}</td>
                         <td>${alarm.relay_no}</td>
                     `;
@@ -158,18 +225,18 @@
             return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
         }
 
-        const pressureData = []; // Store the latest 20 averagePressure values
+        const pressureData = [];
 
         async function fetchAveragePressure() {
             try {
-                const response = await fetch(`http://${DEVICE_IP}/pressure`);
+                const response = await fetch(`${getBaseURL()}/pressure`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch average pressure: ${response.statusText}`);
                 }
                 const pressure = parseInt(await response.text(), 10);
                 if (!isNaN(pressure)) {
                     if (pressureData.length >= 20) {
-                        pressureData.shift(); // Remove the oldest value
+                        pressureData.shift();
                     }
                     pressureData.push(pressure);
                     drawPressureGraph();
@@ -181,9 +248,9 @@
 
         function drawPressureGraph() {
             const graph = document.getElementById("pressureGraph");
-            graph.innerHTML = ""; // Clear the graph
+            graph.innerHTML = "";
 
-            const maxPressure = 600; // Maximum pressure value
+            const maxPressure = 600;
             const graphWidth = graph.clientWidth;
             const graphHeight = graph.clientHeight;
             const barWidth = graphWidth / 20;
@@ -198,12 +265,11 @@
                 const rect = document.createElementNS(svgNS, "rect");
                 rect.setAttribute("x", index * barWidth);
                 rect.setAttribute("y", graphHeight - barHeight);
-                rect.setAttribute("width", barWidth - 2); // Add spacing between bars
+                rect.setAttribute("width", barWidth - 2);
                 rect.setAttribute("height", barHeight);
                 rect.setAttribute("fill", "#007BFF");
                 svg.appendChild(rect);
 
-                // Add label for the latest reading
                 if (index === pressureData.length - 1) {
                     const text = document.createElementNS(svgNS, "text");
                     text.setAttribute("x", index * barWidth + barWidth / 2);
@@ -219,11 +285,10 @@
             graph.appendChild(svg);
         }
 
-        // Fetch average pressure every 3 seconds
         setInterval(fetchAveragePressure, 3000);
 
-        // Fetch system time and alarm data on page load
         window.onload = () => {
+            loadDeviceIP();
             fetchSystemTime();
             fetchAlarmData();
         };

@@ -86,7 +86,7 @@
             }
 
             try {
-                const response = await fetch(`http://192.168.1.213/alarm?alarmNo=${alarmNo}`);
+                const response = await fetch(`http://192.168.1.212/alarm?alarmNo=${alarmNo}`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch alarm ${alarmNo}: ${response.statusText}`);
                 }
@@ -125,14 +125,14 @@
 
             try {
                 await Promise.all([
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=13&paramValue=${status}`), // Alarm Status
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=6&paramValue=${frequency}`), // Day Period
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=1&paramValue=${hour}`), // Alarm Hour
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=2&paramValue=${minute}`), // Alarm Minute
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=4&paramValue=${runMinutes}`), // Run Minutes
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=5&paramValue=${idleMinutes}`), // Idle Minutes
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=3&paramValue=${repeatCount}`), // Repeat Count
-                    fetch(`http://192.168.1.213/setAlarm?alarmNo=${alarmNo}&paramNo=7&paramValue=${relayNo}`) // Relay No
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=13&paramValue=${status}`), // Alarm Status
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=6&paramValue=${frequency}`), // Day Period
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=1&paramValue=${hour}`), // Alarm Hour
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=2&paramValue=${minute}`), // Alarm Minute
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=4&paramValue=${runMinutes}`), // Run Minutes
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=5&paramValue=${idleMinutes}`), // Idle Minutes
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=3&paramValue=${repeatCount}`), // Repeat Count
+                    fetch(`http://192.168.1.212/setAlarm?alarmNo=${alarmNo}&paramNo=7&paramValue=${relayNo}`) // Relay No
                 ]);
                 alert("Alarm updated successfully!");
                 window.location.href = "alarms.html";
