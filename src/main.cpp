@@ -396,7 +396,7 @@ void onRelayStateChange(int relayNo, bool isOn, int reason) {
     } else {
         relayStatusVal &= ~(1 << relayNo);
     }
-    fbSetIntChecked("relays/status", relayStatusVal, "relay_status");
+    //fbSetIntChecked("relays/status", relayStatusVal, "relay_status");
 }
 
 void handleAlarmJson() {
