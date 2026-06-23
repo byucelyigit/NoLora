@@ -661,41 +661,7 @@ void syncAllAlarmsFromFirebase() {
 }
 
 
-void ExecuteCommandFromFirebase()
-{
 
-    static unsigned long lastCheck = 0;
-    unsigned long currentMillis = millis();
-
-    if (currentMillis - lastCheck < 30000) {
-        return;
-    }
-    lastCheck = currentMillis;
-
-    if (WiFi.status() != WL_CONNECTED) {
-        return;
-    }
-
-    int command = fb.getInt("Params/Command");
-    if (command == -1) {
-        return; // No command or error
-    }
-    
-    //command -2 ise o zaman sistem reset işlemini çalıştır
-    if (command == -2) {
-        systemReset();
-        return;
-    }
-
-    // command >-1 ise bu alarm numarasıdır. bu numarayı al ve UpdateAlarmParametersFromFireBase fonksiyonuna gönder. Bu fonksiyon alarm parametrelerini Firebase'den alır ve uygular.
-    if (command >= 0 && command < ALARM_COUNT) {
-        UpdateAlarmParametersFromFireBase(command);
-    }
-
-
-    // Reset the command to -1 after execution
-    fbSetIntChecked("Params/Command", -1, "Command_reset");
-}
 
 void UpdateAlarmParametersFromFireBase(int changedAlarms) {
 
@@ -729,6 +695,44 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
     } else if (requestedCount > 0) {
         Serial.println("UpdateAlarmParametersFromFireBase: partial sync " + String(successCount) + "/" + String(requestedCount));
     }
+}
+
+void ExecuteCommandFromFirebase()
+{
+
+    static unsigned long lastCheck = 0;
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastCheck < 30000) {
+        return;
+    }
+    lastCheck = currentMillis;
+
+    if (WiFi.status() != WL_CONNECTED) {
+        return;
+    }
+
+    int command = fb.getInt("Params/Command");
+    if (command == -1) {
+        return; // No command or error
+    }
+    
+    //command -2 ise o zaman sistem reset işlemini çalıştır
+    if (command == -2) {
+        fb.setInt("Params/Command", -1);
+        fbSetIntChecked("Params/Command", -1, "Command_reset");        
+        systemReset();
+        return;
+    }
+
+    // command >-1 ise bu alarm numarasıdır. bu numarayı al ve UpdateAlarmParametersFromFireBase fonksiyonuna gönder. Bu fonksiyon alarm parametrelerini Firebase'den alır ve uygular.
+    if (command >= 0 && command < ALARM_COUNT) {
+        UpdateAlarmParametersFromFireBase(command);
+    }
+
+
+    // Reset the command to -1 after execution
+    fbSetIntChecked("Params/Command", -1, "Command_reset");
 }
 
 void updateRelaysFromFirebase() {
