@@ -8,6 +8,7 @@
 #include <EEPROM.h>
 #include "Display.h"
 #include <WiFi.h>
+#include <time.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
@@ -23,7 +24,7 @@
 
 
 
-RTC_DATA_ATTR int bootCount = 0;
+//RTC_DATA_ATTR int bootCount = 0;
 
 //pushover diye bir uygulmayı kullanarak iphone bildirim gönderme işlemi yapılabilir.
 //https://pushover.net/apps/9auj2r-gardener
@@ -65,6 +66,9 @@ int averagePressure;
 long lastPingUpdate = 0;
 
 bool alarmsynced = false;
+bool systemStartedMsgSent = false;
+
+
 
 // ---- Firebase Write Queue (Faz 2) ------------------------------------
 // Callback fonksiyonlari icinde dogrudan Firebase yazimi loop'u bloklayabilir.
@@ -259,6 +263,16 @@ void printDateTime(const RtcDateTime& dt)
             dt.Second() );
     Serial.print(datestring);
 }
+
+
+void SystemStartedMessage()
+{
+    if (!systemStartedMsgSent) {
+        pushover.sendNotification("Sistem Başlatıldı. Saat: " + String(time_format_buffer) + " Tarih: " + String(date_format_buffer));
+        systemStartedMsgSent = true;
+    }
+}
+
 
 // Faz 1: Firebase yazimlarini dogrudan gondermek yerine kuyruga birakir.
 // Donus degeri enqueue basarisi; gercek yazim loop() icindeki flush ile olur.
@@ -720,10 +734,8 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
 void updateRelaysFromFirebase() {
     static unsigned long lastFirebaseCheck = 0;
     unsigned long currentMillis = millis();
-
     if (currentMillis - lastFirebaseCheck >= 5000) { // Check every 5 seconds
         lastFirebaseCheck = currentMillis;
-
         // Faz 1: timeout siniri — uzun beklemeyi önler
         http.setTimeout(6000);
         http.begin(REFERENCE_URL + "relays/status.json"); // Firebase REST API endpoint
@@ -732,32 +744,24 @@ void updateRelaysFromFirebase() {
         if (httpCode == HTTP_CODE_OK) {
             String payload = http.getString();
             int relayStatus = payload.toInt(); // Parse the relay status as an integer
-            if (relayStatus >= 0) { // Ensure a valid value is retrieved
-            for (int i = 0; i < RELAY_COUNT; i++) {
-                // Eğer bu röleyi kullanan aktif bir alarm varsa Firebase'i görmezden gel
-                bool alarmActive = false;
-                for (int a = 0; a < ALARM_COUNT; a++) {
-                    if (alrm[a].relay_no == (i + 1) && 
-                        alrm[a].alarm_status != Alarm::AlarmStatus::ALARM_STATUS_STOPPED) {
-                        alarmActive = true;
-                        break;
-                    }
-                }
-                    if (alarmActive) continue;  // Bu röleye dokunma
-
+            if (relayStatus >= 0) 
+            { // Ensure a valid value is retrieved
+                for (int i = 0; i < RELAY_COUNT; i++) 
+                {
                     if (relayStatus & (1 << i)) {
                         relay[i].TurnOn(6);
                     } else {
                         relay[i].TurnOff(7);
                     }
                 }
-            } else {
+            } 
+            else 
+            {
                 Serial.println("Invalid relay status received from Firebase.");
             }
         } else {
             Serial.println("Failed to fetch relay status from Firebase. HTTP code: " + String(httpCode));
         }
-
         http.end(); // Close the connection
     }
 }
@@ -788,7 +792,47 @@ void updatePingTime() {
             now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second());
         fbSetStringChecked("Params/pingtime", String(timeStr), "pingtime");
         fbSetStringChecked("Params/ip", WiFi.localIP().toString(), "ip");
+        SystemStartedMessage();
     }
+}
+
+bool syncRtcFromInternetTurkeyTime() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[NTP] WiFi not connected, skipping internet time sync.");
+        return false;
+    }
+
+    configTime(3 * 3600, 0, "tr.pool.ntp.org", "pool.ntp.org", "time.nist.gov");
+
+    struct tm timeInfo;
+    for (int i = 0; i < 15; i++) {
+        if (getLocalTime(&timeInfo, 1000)) {
+            RtcDateTime ntpTime(
+                timeInfo.tm_year + 1900,
+                timeInfo.tm_mon + 1,
+                timeInfo.tm_mday,
+                timeInfo.tm_hour,
+                timeInfo.tm_min,
+                timeInfo.tm_sec
+            );
+            Rtc.SetDateTime(ntpTime);
+
+            char ntpTimeStr[32];
+            snprintf(ntpTimeStr, sizeof(ntpTimeStr), "%04d-%02d-%02d %02d:%02d:%02d",
+                timeInfo.tm_year + 1900,
+                timeInfo.tm_mon + 1,
+                timeInfo.tm_mday,
+                timeInfo.tm_hour,
+                timeInfo.tm_min,
+                timeInfo.tm_sec);
+            Serial.println(String("[NTP] RTC updated from internet (TR): ") + ntpTimeStr);
+            return true;
+        }
+        delay(250);
+    }
+
+    Serial.println("[NTP] Failed to get internet time.");
+    return false;
 }
 
 void setup(){
@@ -821,7 +865,6 @@ void setup(){
     server.on("/rtc", handleRtcTime);
     server.on("/pressure", handlePressure); // Add endpoint for averagePressure
     server.on("/toggleRelay", handleToggleRelay);
-    server.on("/reset", handleSystemReset);
     server.begin();
     Serial.println("HTTP server started");
 
@@ -840,7 +883,7 @@ void setup(){
 
     //writeAlarmsToFirebase(); // Write all alarms to Firebase during setup
 
-	++bootCount;
+	//++bootCount;
 
     Serial.print("compiled: ");
     Serial.print(__DATE__);
@@ -890,6 +933,8 @@ void setup(){
     {
         Serial.println("RTC is the same as compile time! (not expected but all is fine)");
     }
+
+    syncRtcFromInternetTurkeyTime();
 
     //test clock setting
     //RtcDateTime tt =  RtcDateTime(2021, 1, 1,20, 59, 50);
