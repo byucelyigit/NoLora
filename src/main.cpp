@@ -273,6 +273,12 @@ void SystemStartedMessage()
     }
 }
 
+void LocalTableUpdatedMessage()
+{
+    pushover.sendNotification("Yerel tablo güncellendi. Saat: " + String(time_format_buffer) + " Tarih: " + String(date_format_buffer));
+}
+
+
 
 // Faz 1: Firebase yazimlarini dogrudan gondermek yerine kuyruga birakir.
 // Donus degeri enqueue basarisi; gercek yazim loop() icindeki flush ile olur.
@@ -692,6 +698,7 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
     if (requestedCount > 0 && requestedCount == successCount) {
         fbSetIntChecked("Params/ChangedAlarms", -1, "ChangedAlarms_reset");
         Serial.println("[FB] UpdateAlarmParameters: sync complete, ChangedAlarms reset to -1");
+        LocalTableUpdatedMessage();
     } else if (requestedCount > 0) {
         Serial.println("UpdateAlarmParametersFromFireBase: partial sync " + String(successCount) + "/" + String(requestedCount));
     }
@@ -719,7 +726,7 @@ void ExecuteCommandFromFirebase()
     
     //command -2 ise o zaman sistem reset işlemini çalıştır
     if (command == -2) {
-        fb.setInt("Params/Command", -1);
+        fb.setInt("Params/Command", -1);  // reset olmadan önce -1 yapması lazım yoksa sürekli reset atar.
         fbSetIntChecked("Params/Command", -1, "Command_reset");        
         systemReset();
         return;
