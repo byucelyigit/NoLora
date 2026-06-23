@@ -3,137 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Relay Control</title>
+    <title>Relay Command Panel</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f9;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: linear-gradient(160deg, #eef7ff 0%, #f4fff2 100%);
+            color: #1e293b;
         }
         h1 {
-            color: #333;
+            margin: 0 0 16px;
+            font-size: 28px;
         }
-        .relay-container {
-            display: flex;
-            flex-wrap: wrap;
+        .panel {
+            max-width: 980px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 1px solid #dbe5ee;
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+            overflow: hidden;
+        }
+        .header {
+            padding: 18px 20px;
+            background: #f8fbff;
+            border-bottom: 1px solid #e5edf5;
+        }
+        .sub {
+            margin: 6px 0 0;
+            font-size: 14px;
+            color: #4b5563;
+        }
+        .relay-grid {
+            display: grid;
+            grid-template-columns: 1fr;
             gap: 10px;
+            padding: 16px;
+        }
+        .relay-row {
+            display: grid;
+            grid-template-columns: minmax(180px, 1fr) auto auto;
+            gap: 10px;
+            align-items: center;
+            padding: 12px;
+            background: #fbfdff;
+            border: 1px solid #e3edf7;
+            border-radius: 12px;
+        }
+        .relay-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: #0f172a;
         }
         button {
-            padding: 10px 20px;
-            font-size: 16px;
+            min-width: 130px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 600;
             color: #fff;
-            background-color: #007BFF;
-            border: none;
-            border-radius: 5px;
+            border: 0;
+            border-radius: 10px;
             cursor: pointer;
+            transition: transform 0.12s ease, filter 0.12s ease;
         }
-        button.active {
-            background-color: #ffc107 !important; /* Add !important to override conflicting styles */
-            color: #000 !important; /* Add !important for text color */
+        button:active {
+            transform: translateY(1px);
         }
-        button:hover {
-            background-color: #0056b3;
+        .btn-on {
+            background: #16a34a;
+        }
+        .btn-on:hover {
+            filter: brightness(0.94);
+        }
+        .btn-off {
+            background: #dc2626;
+        }
+        .btn-off:hover {
+            filter: brightness(0.94);
+        }
+        .status {
+            max-width: 980px;
+            margin: 12px auto 0;
+            font-size: 14px;
+            color: #334155;
+        }
+        .status.error {
+            color: #b91c1c;
+        }
+        .status.ok {
+            color: #166534;
+        }
+        @media (max-width: 760px) {
+            .relay-row {
+                grid-template-columns: 1fr 1fr;
+            }
+            .relay-name {
+                grid-column: 1 / -1;
+            }
+            button {
+                min-width: 0;
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Relay Control Panel</h1>
-    <div class="relay-container">
-        <button id="relay-0">Relay 1</button>
-        <button id="relay-1">Relay 2</button>
-        <button id="relay-2">Relay 3</button>
-        <button id="relay-3">Relay 4</button>
-        <button id="relay-4">Relay 5</button>
-        <button id="relay-5">Relay 6</button>
-        <button id="relay-6">Relay 7</button>
-        <button id="relay-7">Relay 8</button>
+    <div class="panel">
+        <div class="header">
+            <h1>Relay Command Panel</h1>
+            <p class="sub">Her röle için ON ve OFF komutu yazılır.</p>
+        </div>
+        <div id="relay-grid" class="relay-grid"></div>
     </div>
+    <div id="status" class="status">Hazır</div>
 
     <script>
         const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app";
+        const relayNames = new Array(8).fill("");
 
-        // Fetch the current relay status
-        function fetchRelayStatus() {
-            fetch(`${firebaseUrl}/relays/status.json`) // Ensure '.json' is appended to the path
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Error: ${response.statusText}`);
-                    }
-                    return response.json();
-                })
-                .then(status => {
-                    updateRelayButtons(status);
-                })
-                .catch(error => {
-                    console.error("Failed to fetch relay status:", error);
-                });
+        function setStatus(message, isError = false) {
+            const box = document.getElementById("status");
+            box.textContent = message;
+            box.className = isError ? "status error" : "status ok";
         }
 
-        // Update button states based on the relay status
-        function updateRelayButtons(status) {
+        function renderRelayButtons() {
+            const grid = document.getElementById("relay-grid");
+            grid.innerHTML = "";
+
             for (let i = 0; i < 8; i++) {
-                const button = document.getElementById(`relay-${i}`);
-                if (status & (1 << i)) {
-                    button.classList.add("active"); // Ensure the 'active' class is added
-                } else {
-                    button.classList.remove("active"); // Ensure the 'active' class is removed
-                }
+                const relayNo = i + 1;
+                const relayLabel = relayNames[i] && relayNames[i].trim() !== "" ? relayNames[i] : `Relay ${relayNo}`;
+
+                const row = document.createElement("div");
+                row.className = "relay-row";
+
+                const name = document.createElement("div");
+                name.className = "relay-name";
+                name.textContent = relayLabel;
+
+                const onBtn = document.createElement("button");
+                onBtn.className = "btn-on";
+                onBtn.textContent = "ON";
+                onBtn.addEventListener("click", () => writeCommand(relayNo + 10, `${relayLabel} ON`));
+
+                const offBtn = document.createElement("button");
+                offBtn.className = "btn-off";
+                offBtn.textContent = "OFF";
+                offBtn.addEventListener("click", () => writeCommand(relayNo + 20, `${relayLabel} OFF`));
+
+                row.appendChild(name);
+                row.appendChild(onBtn);
+                row.appendChild(offBtn);
+                grid.appendChild(row);
             }
         }
 
-        // Toggle a relay and update the status in Firebase
-        function toggleRelay(index) {
-            fetch(`${firebaseUrl}/relays/status.json`) // Ensure '.json' is appended to the path
+        function writeCommand(commandValue, actionLabel) {
+            fetch(`${firebaseUrl}/Params/Command.json`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(commandValue)
+            })
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error(`Error: ${response.statusText}`);
+                        throw new Error(`HTTP ${response.status}`);
                     }
-                    return response.json();
-                })
-                .then(status => {
-                    const newStatus = status ^ (1 << index); // Toggle only the bit for the selected relay
-                    return fetch(`${firebaseUrl}/relays/status.json`, { // Ensure '.json' is appended to the path
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(newStatus)
-                    });
-                })
-                .then(() => {
-                    fetchRelayStatus(); // Refresh the button states
+                    setStatus(`Komut yazıldı: ${actionLabel} (Params/Command=${commandValue})`);
                 })
                 .catch(error => {
-                    console.error("Failed to toggle relay:", error);
+                    console.error("Failed to write command:", error);
+                    setStatus(`Komut yazılamadı: ${actionLabel}`, true);
                 });
         }
 
-        // Fetch relay names and update button labels
-        function fetchRelayNames() {
+        function fetchRelayNamesAndRender() {
+            const requests = [];
             for (let i = 0; i < 8; i++) {
-                fetch(`${firebaseUrl}/relays/relay${i}.json`)
+                const req = fetch(`${firebaseUrl}/relays/relay${i}.json`)
                     .then(response => response.ok ? response.json() : null)
                     .then(name => {
-                        const btn = document.getElementById(`relay-${i}`);
                         if (name && typeof name === "string" && name.trim() !== "") {
-                            btn.textContent = name;
+                            relayNames[i] = name;
                         } else {
-                            btn.textContent = `Relay ${i + 1}`;
+                            relayNames[i] = `Relay ${i + 1}`;
                         }
                     })
                     .catch(() => {
-                        const btn = document.getElementById(`relay-${i}`);
-                        btn.textContent = `Relay ${i + 1}`;
+                        relayNames[i] = `Relay ${i + 1}`;
                     });
+                requests.push(req);
             }
+
+            Promise.all(requests).then(() => renderRelayButtons());
         }
 
-        // Attach event listeners to buttons
-        for (let i = 0; i < 8; i++) {
-            document.getElementById(`relay-${i}`).addEventListener("click", () => toggleRelay(i));
-        }
-
-        // Initial fetch of relay status and names
-        fetchRelayStatus();
-        fetchRelayNames();
+        fetchRelayNamesAndRender();
     </script>
 </body>
 </html>

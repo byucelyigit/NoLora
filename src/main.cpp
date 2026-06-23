@@ -739,6 +739,15 @@ void ExecuteCommandFromFirebase()
         UpdateAlarmParametersFromFireBase(command);
     }
 
+    if(command > 10 && command < 20)
+    {
+            relay[command-11].TurnOn(6);
+    }
+
+    if(command > 20 && command < 30)
+    {
+            relay[command-21].TurnOff(7);
+    }
 
     // Reset the command to -1 after execution
     fbSetIntChecked("Params/Command", -1, "Command_reset");
@@ -1140,7 +1149,7 @@ void loop() {
         Serial.println("RTC lost confidence in the DateTime!");
     }
 
-    updateRelaysFromFirebase();
+    //updateRelaysFromFirebase();
     server.handleClient();
     ExecuteCommandFromFirebase();
     server.handleClient();
