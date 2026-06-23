@@ -553,6 +553,13 @@ void handleToggleRelay() {
     }
 }
 
+void systemReset() {
+    Serial.println("\n\n=== SYSTEM RESET INITIATED ===");
+    Serial.println("Performing system reset in 2 seconds...");
+    delay(2000);  // Give time to see the message in serial
+    ESP.restart();  // Perform ESP32 software reset
+}
+
 void writeAlarmsToFirebase() {
     for (int i = 0; i < ALARM_COUNT; i++) {
         String alarmPath = "Alarms/Alarm" + String(i);
@@ -639,7 +646,10 @@ void syncAllAlarmsFromFirebase() {
     Serial.println("syncAllAlarmsFromFirebase: synced " + String(syncedCount) + "/" + String(ALARM_COUNT) + " alarms.");
 }
 
-void UpdateAlarmParametersFromFireBase() {
+
+void ExecuteCommandFromFirebase()
+{
+
     static unsigned long lastCheck = 0;
     unsigned long currentMillis = millis();
 
@@ -652,12 +662,28 @@ void UpdateAlarmParametersFromFireBase() {
         return;
     }
 
-    // Faz 3: WiFi korumalı getInt — kütüphane tek argüman döner (0 hem hata hem geçerli olabilir)
-    if (WiFi.status() != WL_CONNECTED) return;
-    int changedAlarms = fb.getInt("Params/ChangedAlarms");
-    if (changedAlarms == -1) {
+    int command = fb.getInt("Params/Command");
+    if (command == -1) {
+        return; // No command or error
+    }
+    
+    //command -2 ise o zaman sistem reset işlemini çalıştır
+    if (command == -2) {
+        systemReset();
         return;
     }
+
+    // command >-1 ise bu alarm numarasıdır. bu numarayı al ve UpdateAlarmParametersFromFireBase fonksiyonuna gönder. Bu fonksiyon alarm parametrelerini Firebase'den alır ve uygular.
+    if (command >= 0 && command < ALARM_COUNT) {
+        UpdateAlarmParametersFromFireBase(command);
+    }
+
+
+    // Reset the command to -1 after execution
+    fbSetIntChecked("Params/Command", -1, "Command_reset");
+}
+
+void UpdateAlarmParametersFromFireBase(int changedAlarms) {
 
     int requestedCount = 0;
     int successCount = 0;
@@ -795,6 +821,7 @@ void setup(){
     server.on("/rtc", handleRtcTime);
     server.on("/pressure", handlePressure); // Add endpoint for averagePressure
     server.on("/toggleRelay", handleToggleRelay);
+    server.on("/reset", handleSystemReset);
     server.begin();
     Serial.println("HTTP server started");
 
@@ -1054,7 +1081,7 @@ void loop() {
     }
 
     updateRelaysFromFirebase();
-    UpdateAlarmParametersFromFireBase();
+    ExecuteCommandFromFirebase();
     updatePingTime();
     // Faz 2: Kuyrukta bekleyen Firebase yazimlarini kisa sure bütçesiyle gönder
     fbQueueFlush();
