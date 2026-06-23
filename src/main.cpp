@@ -383,19 +383,19 @@ void onRelayStateChange(int relayNo, bool isOn, int reason) {
     Serial.println("[FB] Queued relay log: " + logMessage);
 
     // Faz 1+3: relays/status güncellemesi — geçersiz değer (<=0) koruması ile
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("[FB] relays/status skip (no WiFi)");
-        return;
-    }
+    //if (WiFi.status() != WL_CONNECTED) {
+    //    Serial.println("[FB] relays/status skip (no WiFi)");
+    //    return;
+    //}
     // Kutuphanenin getInt(path) tek arguman döner, 0 hem gecersiz hem de gecerli deger olabilir;
     // WiFi kontrolunu yukarida yaptik, bu noktada bagliyz demek.
-    int relayStatusVal = fb.getInt("relays/status");
-    if (relayStatusVal < 0) relayStatusVal = 0; // Faz 1 bug fix: gecersiz deger koruması
-    if (isOn) {
-        relayStatusVal |= (1 << relayNo);
-    } else {
-        relayStatusVal &= ~(1 << relayNo);
-    }
+    //int relayStatusVal = fb.getInt("relays/status");
+    //if (relayStatusVal < 0) relayStatusVal = 0; // Faz 1 bug fix: gecersiz deger koruması
+    //if (isOn) {
+    //    relayStatusVal |= (1 << relayNo);
+    //} else {
+    //    relayStatusVal &= ~(1 << relayNo);
+    //}
     //fbSetIntChecked("relays/status", relayStatusVal, "relay_status");
 }
 
