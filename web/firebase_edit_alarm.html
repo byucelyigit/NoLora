@@ -186,7 +186,7 @@
                     if (currentChangeValue === 0) {
                         changedAlarmsValue = 0;
                     } else {
-                        const changedReadResponse = await fetch(`${firebaseParamsUrl}/ChangedAlarms.json`);
+                        const changedReadResponse = await fetch(`${firebaseParamsUrl}/Command.json`);
                         if (!changedReadResponse.ok) {
                             throw new Error(`Failed to read ChangedAlarms: ${changedReadResponse.statusText}`);
                         }
@@ -197,13 +197,13 @@
                         changedAlarmsValue = existingMask | currentChangeValue;
                     }
 
-                    const changedResponse = await fetch(`${firebaseParamsUrl}/ChangedAlarms.json`, {
+                    const changedResponse = await fetch(`${firebaseParamsUrl}/Command.json`, {
                         method: "PUT",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(changedAlarmsValue),
                     });
                     if (!changedResponse.ok) {
-                        throw new Error(`Failed to update ChangedAlarms: ${changedResponse.statusText}`);
+                        throw new Error(`Failed to update Command: ${changedResponse.statusText}`);
                     }
                 }
 

@@ -182,6 +182,7 @@ ThreeWire myWire(CLOCK_IO,CLOCK_SCL,CLOCK_RST);
 RtcDS1302<ThreeWire> Rtc(myWire);
 
 HTTPClient http;
+//http.settimeout(2000); // Set timeout to 2 seconds
 
 EEPROMClass eprom;
 
@@ -268,14 +269,14 @@ void printDateTime(const RtcDateTime& dt)
 void SystemStartedMessage()
 {
     if (!systemStartedMsgSent) {
-        pushover.sendNotification("Sistem Başlatıldı. Saat: " + String(time_format_buffer) + " Tarih: " + String(date_format_buffer));
+        pushover.sendNotification("Sistem Başlatıldı.");
         systemStartedMsgSent = true;
     }
 }
 
 void LocalTableUpdatedMessage()
 {
-    pushover.sendNotification("Yerel tablo güncellendi. Saat: " + String(time_format_buffer) + " Tarih: " + String(date_format_buffer));
+    pushover.sendNotification("Yerel tablo güncellendi.");
 }
 
 
@@ -533,6 +534,7 @@ void handleSetAlarm() {
 }
 
 void handleRtcTime() {
+    Serial.println("RtcTime Request Received");
     RtcDateTime now = Rtc.GetDateTime();
     if (now.IsValid()) {
         char rtcTime[20];
@@ -696,8 +698,8 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
     }
 
     if (requestedCount > 0 && requestedCount == successCount) {
-        fbSetIntChecked("Params/ChangedAlarms", -1, "ChangedAlarms_reset");
-        Serial.println("[FB] UpdateAlarmParameters: sync complete, ChangedAlarms reset to -1");
+        fbSetIntChecked("Params/Command", -1, "Command_reset");
+        Serial.println("[FB] UpdateAlarmParameters: sync complete, Command reset to -1");
         LocalTableUpdatedMessage();
     } else if (requestedCount > 0) {
         Serial.println("UpdateAlarmParametersFromFireBase: partial sync " + String(successCount) + "/" + String(requestedCount));
@@ -748,7 +750,7 @@ void updateRelaysFromFirebase() {
     if (currentMillis - lastFirebaseCheck >= 5000) { // Check every 5 seconds
         lastFirebaseCheck = currentMillis;
         // Faz 1: timeout siniri — uzun beklemeyi önler
-        http.setTimeout(6000);
+        http.setTimeout(2000);
         http.begin(REFERENCE_URL + "relays/status.json"); // Firebase REST API endpoint
         int httpCode = http.GET();
 
@@ -1011,6 +1013,8 @@ void setup(){
 
 void loop() {
 
+    server.handleClient(); // Handle HTTP requests at the start of each loop iteration
+
     checkWiFiReconnect(); // Check WiFi connection status and reconnect if needed
 
     static unsigned long lastPressureCheck = 0;
@@ -1077,15 +1081,15 @@ void loop() {
             long rssi = WiFi.RSSI();
             additionalInfo = "RSSI: " + String(rssi);
             // Faz 2: İlk baglantida tek seferlik sync (loop blogu degil — sadece bir kez calisir)
-            if (!alarmsynced) {
-                Serial.println("[FB] First-connect alarm sync start");
-                syncAlarmFromFirebase(0);
-                syncAlarmFromFirebase(1);
-                syncAlarmFromFirebase(2);
-                syncAlarmFromFirebase(3);
-                alarmsynced = true;
-                Serial.println("[FB] First-connect alarm sync done");
-            }
+            //if (!alarmsynced) {
+            //    Serial.println("[FB] First-connect alarm sync start");
+            //    syncAlarmFromFirebase(0);
+            //    syncAlarmFromFirebase(1);
+            //    syncAlarmFromFirebase(2);
+            //    syncAlarmFromFirebase(3);
+            //    alarmsynced = true;
+            //    Serial.println("[FB] First-connect alarm sync done");
+            //}
             display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str(), now, pressureValue);
         }
     //display.showPressure(pressureValue); // Assuming display.showPressure() is a method to show pressure
@@ -1137,7 +1141,9 @@ void loop() {
     }
 
     updateRelaysFromFirebase();
+    server.handleClient();
     ExecuteCommandFromFirebase();
+    server.handleClient();
     updatePingTime();
     // Faz 2: Kuyrukta bekleyen Firebase yazimlarini kisa sure bütçesiyle gönder
     fbQueueFlush();
