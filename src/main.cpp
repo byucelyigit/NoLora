@@ -394,7 +394,7 @@ void onRelayStateChange(int relayNo, bool isOn, int reason) {
              dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second());
     String logMessage = "[" + String(timestamp) + "] Relay " + String(relayNo) + " turned " + state + " (Reason: " + String(reason) + ")";
     // Faz 2: relay logu kuyruğa bırak — bloklamaz
-    char logPathBuf[64];
+    char logPathBuf[128];
     logPath.toCharArray(logPathBuf, sizeof(logPathBuf));
     fbQueueEnqueuePushString(logPathBuf, logMessage);
     Serial.println("[FB] Queued relay log: " + logMessage);
