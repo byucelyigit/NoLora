@@ -702,6 +702,45 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
     }
 }
 
+bool syncRtcFromInternetTurkeyTime() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[NTP] WiFi not connected, skipping internet time sync.");
+        return false;
+    }
+
+    configTime(3 * 3600, 0, "tr.pool.ntp.org", "pool.ntp.org", "time.nist.gov");
+
+    struct tm timeInfo;
+    for (int i = 0; i < 15; i++) {
+        if (getLocalTime(&timeInfo, 1000)) {
+            RtcDateTime ntpTime(
+                timeInfo.tm_year + 1900,
+                timeInfo.tm_mon + 1,
+                timeInfo.tm_mday,
+                timeInfo.tm_hour,
+                timeInfo.tm_min,
+                timeInfo.tm_sec
+            );
+            Rtc.SetDateTime(ntpTime);
+
+            char ntpTimeStr[32];
+            snprintf(ntpTimeStr, sizeof(ntpTimeStr), "%04d-%02d-%02d %02d:%02d:%02d",
+                timeInfo.tm_year + 1900,
+                timeInfo.tm_mon + 1,
+                timeInfo.tm_mday,
+                timeInfo.tm_hour,
+                timeInfo.tm_min,
+                timeInfo.tm_sec);
+            Serial.println(String("[NTP] RTC updated from internet (TR): ") + ntpTimeStr);
+            return true;
+        }
+        delay(250);
+    }
+
+    Serial.println("[NTP] Failed to get internet time.");
+    return false;
+}
+
 void ExecuteCommandFromFirebase()
 {
 
@@ -824,44 +863,7 @@ void updatePingTime() {
     }
 }
 
-bool syncRtcFromInternetTurkeyTime() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("[NTP] WiFi not connected, skipping internet time sync.");
-        return false;
-    }
 
-    configTime(3 * 3600, 0, "tr.pool.ntp.org", "pool.ntp.org", "time.nist.gov");
-
-    struct tm timeInfo;
-    for (int i = 0; i < 15; i++) {
-        if (getLocalTime(&timeInfo, 1000)) {
-            RtcDateTime ntpTime(
-                timeInfo.tm_year + 1900,
-                timeInfo.tm_mon + 1,
-                timeInfo.tm_mday,
-                timeInfo.tm_hour,
-                timeInfo.tm_min,
-                timeInfo.tm_sec
-            );
-            Rtc.SetDateTime(ntpTime);
-
-            char ntpTimeStr[32];
-            snprintf(ntpTimeStr, sizeof(ntpTimeStr), "%04d-%02d-%02d %02d:%02d:%02d",
-                timeInfo.tm_year + 1900,
-                timeInfo.tm_mon + 1,
-                timeInfo.tm_mday,
-                timeInfo.tm_hour,
-                timeInfo.tm_min,
-                timeInfo.tm_sec);
-            Serial.println(String("[NTP] RTC updated from internet (TR): ") + ntpTimeStr);
-            return true;
-        }
-        delay(250);
-    }
-
-    Serial.println("[NTP] Failed to get internet time.");
-    return false;
-}
 
 void setup(){
 	Serial.begin(115200);
