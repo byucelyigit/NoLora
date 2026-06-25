@@ -774,7 +774,7 @@ void ExecuteCommandFromFirebase()
     if(command == -3) {
         syncRtcFromInternetTurkeyTime();
         pushover.sendNotification("Saat bilgisi internetten güncellendi.");  
-        return;
+        //return;
     }
 
     // command >-1 ise bu alarm numarasıdır. bu numarayı al ve UpdateAlarmParametersFromFireBase fonksiyonuna gönder. Bu fonksiyon alarm parametrelerini Firebase'den alır ve uygular.
