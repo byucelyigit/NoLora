@@ -87,7 +87,7 @@ enum FbWriteKind : uint8_t {
 
 struct FbWriteItem {
     char path[64];
-    char value[48];
+    char value[192];
     FbWriteKind kind;
     unsigned long enqueuedAt;
 };
@@ -330,9 +330,8 @@ void logAlarmToFirebase(int alarmNo, const String& message) {
              dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second());
     String logMessage = "[" + String(timestamp) + "] " + message;
     // Kuyruga bırak — loop() icerisinde flush edilecek
-    char pathBuf[64]; char valBuf[48];
+    char pathBuf[64];
     logPath.toCharArray(pathBuf, sizeof(pathBuf));
-    logMessage.toCharArray(valBuf, sizeof(valBuf));
     fbQueueEnqueuePushString(pathBuf, logMessage);
     Serial.println("[FB] Queued log: " + logMessage);
 }
@@ -389,17 +388,14 @@ void onRelayStateChange(int relayNo, bool isOn, int reason) {
 
     // Example: Log relay state change to Firebase
     String logPath = "RelayLogs/Relay" + String(relayNo) + "/Log";
-    String timestamp = String(Rtc.GetDateTime().Year()) + "-" +
-                       String(Rtc.GetDateTime().Month()) + "-" +
-                       String(Rtc.GetDateTime().Day()) + " " +
-                       String(Rtc.GetDateTime().Hour()) + ":" +
-                       String(Rtc.GetDateTime().Minute()) + ":" +
-                       String(Rtc.GetDateTime().Second());
-    String logMessage = "[" + timestamp + "] Relay " + String(relayNo) + " turned " + state + " (Reason: " + String(reason) + ")";
+    RtcDateTime dt = Rtc.GetDateTime();
+    char timestamp[20];
+    snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
+             dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second());
+    String logMessage = "[" + String(timestamp) + "] Relay " + String(relayNo) + " turned " + state + " (Reason: " + String(reason) + ")";
     // Faz 2: relay logu kuyruğa bırak — bloklamaz
-    char logPathBuf[64]; char logValBuf[48];
+    char logPathBuf[64];
     logPath.toCharArray(logPathBuf, sizeof(logPathBuf));
-    logMessage.toCharArray(logValBuf, sizeof(logValBuf));
     fbQueueEnqueuePushString(logPathBuf, logMessage);
     Serial.println("[FB] Queued relay log: " + logMessage);
 
