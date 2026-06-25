@@ -95,14 +95,14 @@ struct FbWriteItem {
 FbWriteItem fbQueue[FB_QUEUE_SIZE];
 volatile uint8_t fbQueueHead = 0;
 volatile uint8_t fbQueueTail = 0;
-uint16_t fbDropCount = 0;
-uint16_t fbErrorCount = 0;
-uint16_t fbSuccessCount = 0;
+//uint16_t fbDropCount = 0;
+//uint16_t fbErrorCount = 0;
+//uint16_t fbSuccessCount = 0;
 
 bool fbQueueEnqueue(FbWriteKind kind, const char* path, const char* value) {
     uint8_t next = (fbQueueTail + 1) % FB_QUEUE_SIZE;
     if (next == fbQueueHead) {
-        fbDropCount++;
+        //fbDropCount++;
         Serial.println("[FB] Queue full - drop: " + String(path));
         return false;
     }
@@ -148,7 +148,7 @@ void fbQueueFlush() {
 
         FbWriteItem& item = fbQueue[fbQueueHead];
         if (millis() - item.enqueuedAt > FB_WRITE_MAX_AGE_MS) {
-            fbDropCount++;
+            //fbDropCount++;
             Serial.println("[FB] Drop stale write: " + String(item.path));
             fbQueueHead = (fbQueueHead + 1) % FB_QUEUE_SIZE;
             continue;
@@ -164,9 +164,9 @@ void fbQueueFlush() {
         }
 
         if (rc == 200) {
-            fbSuccessCount++;
+            //fbSuccessCount++;
         } else {
-            fbErrorCount++;
+            //fbErrorCount++;
             Serial.println("[FB] Write failed rc=" + String(rc) + " path=" + String(item.path));
         }
 
@@ -698,8 +698,8 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
     }
 
     if (requestedCount > 0 && requestedCount == successCount) {
-        fbSetIntChecked("Params/Command", -1, "Command_reset");
-        Serial.println("[FB] UpdateAlarmParameters: sync complete, Command reset to -1");
+        //fbSetIntChecked("Params/Command", -1, "Command_reset");
+        //Serial.println("[FB] UpdateAlarmParameters: sync complete, Command reset to -1");
         LocalTableUpdatedMessage();
     } else if (requestedCount > 0) {
         Serial.println("UpdateAlarmParametersFromFireBase: partial sync " + String(successCount) + "/" + String(requestedCount));
@@ -731,6 +731,12 @@ void ExecuteCommandFromFirebase()
         fb.setInt("Params/Command", -1);  // reset olmadan önce -1 yapması lazım yoksa sürekli reset atar.
         fbSetIntChecked("Params/Command", -1, "Command_reset");        
         systemReset();
+        return;
+    }
+
+    // saat bilgsini internetten oku
+    if(command == -3) {
+        syncRtcFromInternetTurkeyTime();
         return;
     }
 
@@ -956,7 +962,7 @@ void setup(){
         Serial.println("RTC is the same as compile time! (not expected but all is fine)");
     }
 
-    syncRtcFromInternetTurkeyTime();
+    //syncRtcFromInternetTurkeyTime();
 
     //test clock setting
     //RtcDateTime tt =  RtcDateTime(2021, 1, 1,20, 59, 50);
