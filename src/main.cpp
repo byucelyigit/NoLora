@@ -724,6 +724,7 @@ void ExecuteCommandFromFirebase()
     
     //command -2 ise o zaman sistem reset işlemini çalıştır
     if (command == -2) {
+        pushover.sendNotification("Resetleme...");  
         fb.setInt("Params/Command", -1);  // reset olmadan önce -1 yapması lazım yoksa sürekli reset atar.
         fbSetIntChecked("Params/Command", -1, "Command_reset");        
         systemReset();
@@ -733,6 +734,7 @@ void ExecuteCommandFromFirebase()
     // saat bilgsini internetten oku
     if(command == -3) {
         syncRtcFromInternetTurkeyTime();
+        pushover.sendNotification("Saat bilgisi internetten güncellendi.");  
         return;
     }
 
@@ -743,19 +745,21 @@ void ExecuteCommandFromFirebase()
 
     if(command > 10 && command < 20)
     {
-            relay[command-11].TurnOn(6);
+        relay[command-11].TurnOn(6);
+        pushover.sendNotification("röle ON durumu: " + String(command-11));
     }
 
     if(command > 20 && command < 30)
     {
-            relay[command-21].TurnOff(7);
+        relay[command-21].TurnOff(7);
+        pushover.sendNotification("röle OFF durumu: " + String(command-21));
     }
 
     // Reset the command to -1 after execution
     fbSetIntChecked("Params/Command", -1, "Command_reset");
 }
 
-void updateRelaysFromFirebase() {
+/* void updateRelaysFromFirebase() {
     static unsigned long lastFirebaseCheck = 0;
     unsigned long currentMillis = millis();
     if (currentMillis - lastFirebaseCheck >= 5000) { // Check every 5 seconds
@@ -788,7 +792,7 @@ void updateRelaysFromFirebase() {
         }
         http.end(); // Close the connection
     }
-}
+} */
 
 void checkWiFiReconnect() {
     static unsigned long lastAttempt = 0;
