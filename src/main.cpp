@@ -117,7 +117,7 @@ bool fbQueueEnqueue(FbWriteKind kind, const char* path, const char* value) {
 }
 
 bool fbQueueEnqueueString(const char* path, const String& value) {
-    char buffer[48];
+    char buffer[sizeof(fbQueue[0].value)];
     value.toCharArray(buffer, sizeof(buffer));
     return fbQueueEnqueue(FB_WRITE_SET_STRING, path, buffer);
 }
@@ -129,7 +129,7 @@ bool fbQueueEnqueueInt(const char* path, int value) {
 }
 
 bool fbQueueEnqueuePushString(const char* path, const String& value) {
-    char buffer[48];
+    char buffer[sizeof(fbQueue[0].value)];
     value.toCharArray(buffer, sizeof(buffer));
     return fbQueueEnqueue(FB_WRITE_PUSH_STRING, path, buffer);
 }
