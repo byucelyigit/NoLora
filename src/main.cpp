@@ -79,6 +79,9 @@ bool systemStartedMsgSent = false;
 #define FB_QUEUE_FLUSH_BUDGET_MS 250
 #define FB_WRITE_MAX_AGE_MS 15000
 
+#define PUSHOVER_QUEUE_SIZE 8
+#define PUSHOVER_MESSAGE_MAX_LEN 192
+
 enum FbWriteKind : uint8_t {
     FB_WRITE_SET_STRING = 0,
     FB_WRITE_SET_INT = 1,
@@ -98,6 +101,10 @@ volatile uint8_t fbQueueTail = 0;
 //uint16_t fbDropCount = 0;
 //uint16_t fbErrorCount = 0;
 //uint16_t fbSuccessCount = 0;
+
+char pushoverQueue[PUSHOVER_QUEUE_SIZE][PUSHOVER_MESSAGE_MAX_LEN];
+volatile uint8_t pushoverQueueHead = 0;
+volatile uint8_t pushoverQueueTail = 0;
 
 bool fbQueueEnqueue(FbWriteKind kind, const char* path, const char* value) {
     uint8_t next = (fbQueueTail + 1) % FB_QUEUE_SIZE;
@@ -132,6 +139,26 @@ bool fbQueueEnqueuePushString(const char* path, const String& value) {
     char buffer[sizeof(fbQueue[0].value)];
     value.toCharArray(buffer, sizeof(buffer));
     return fbQueueEnqueue(FB_WRITE_PUSH_STRING, path, buffer);
+}
+
+bool pushoverQueueEnqueue(const String& message) {
+    uint8_t next = (pushoverQueueTail + 1) % PUSHOVER_QUEUE_SIZE;
+    if (next == pushoverQueueHead) {
+        Serial.println("[PUSHOVER] Queue full - drop: " + message);
+        return false;
+    }
+
+    message.toCharArray(pushoverQueue[pushoverQueueTail], PUSHOVER_MESSAGE_MAX_LEN);
+    pushoverQueue[pushoverQueueTail][PUSHOVER_MESSAGE_MAX_LEN - 1] = '\0';
+    pushoverQueueTail = next;
+    return true;
+}
+
+void pushoverQueueFlush(Pushover& pushoverInstance) {
+    while (pushoverQueueHead != pushoverQueueTail) {
+        pushoverInstance.sendNotification(String(pushoverQueue[pushoverQueueHead]));
+        pushoverQueueHead = (pushoverQueueHead + 1) % PUSHOVER_QUEUE_SIZE;
+    }
 }
 
 // Her loop() cagrisinda en fazla bu kadar zaman harcanir.
@@ -357,7 +384,7 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
                 statusString = "RUNNING";
                 relay[rln-1].TurnOn(1);
                 snprintf(time_format_buffer, sizeof(time_format_buffer), "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
-                pushover.sendNotification("Bahçe Sulama Başladı. " + String(rln) + " numaralı vana açıldı. Sistem saati: " + String(time_format_buffer) + " Beklenen görev süresi: " + String(alrm[alarmNo].repeat_count * (alrm[alarmNo].run_minutes + alrm[alarmNo].idle_minutes)) + " dakika. Görev No: " + String(alarmNo));
+                pushoverQueueEnqueue("Bahçe Sulama Başladı. " + String(rln) + " numaralı vana açıldı. Sistem saati: " + String(time_format_buffer) + " Beklenen görev süresi: " + String(alrm[alarmNo].repeat_count * (alrm[alarmNo].run_minutes + alrm[alarmNo].idle_minutes)) + " dakika. Görev No: " + String(alarmNo));
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STARTED" + "Relay No:" + String(rln));
                 FirebaseAlarmStatus(alarmNo, 1);
                 break;
@@ -365,7 +392,7 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
                 relay[rln-1].TurnOff(2);
                 alrm[alarmNo].SaveLastDate(now.Day(), now.Month(), now.Year(), eprom); //normalde bunun alarm nesnesi içinde olması lazım. ama eprom nesnesinin her bir alarma gönderilmesi doğru mu bilemedim. şimdilik böyle kalsın.
                 FirebaseLastRunDate(alarmNo);
-                pushover.sendNotification("Bahçe Sulandı. " + String(rln) + " numaralı vana kapandı.");
+                pushoverQueueEnqueue("Bahçe Sulandı. " + String(rln) + " numaralı vana kapandı.");
                 logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STOPPED");
                 FirebaseAlarmStatus(alarmNo, 0);
                 statusString = "STOPPED";
@@ -1115,6 +1142,8 @@ void loop() {
     for (int i = 0; i < 8; i++) {
         alrm[i].Update(now);
     }
+
+    pushoverQueueFlush(pushover);
 
 	String status = "OK";
 	long reading = 0;
