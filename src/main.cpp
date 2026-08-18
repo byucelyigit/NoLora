@@ -615,19 +615,32 @@ void writeAlarmsToFirebase() {
     }
 }
 
-bool applyAlarmParamFromJson(int alarmNo, JsonObjectConst alarmObj, const char* key, int paramNo) {
+bool applyAlarmParamFromJson(int alarmNo, JsonObjectConst alarmObj, const char* key, int paramNo, bool* fieldPresent = nullptr) {
     JsonVariantConst field = alarmObj[key];
     if (field.isNull()) {
+        if (fieldPresent) {
+            *fieldPresent = false;
+        }
         return false;
     }
 
+    if (fieldPresent) {
+        *fieldPresent = true;
+    }
+
     int paramValue = field.as<int>();
+
+    int currentValue = alrm[alarmNo].GetParamValue(paramNo);
+    if (currentValue == paramValue) {
+        return false;
+    }
+
     alrm[alarmNo].SetParamValue(paramNo, paramValue, eprom);
     Serial.println("Alarm " + String(alarmNo) + ": synced " + String(key) + "=" + String(paramValue));
     return true;
 }
 
-bool syncAlarmFromFirebase(int alarmNo) {
+bool syncAlarmFromFirebase(int alarmNo, bool* changedOut = nullptr) {
     if (alarmNo < 0 || alarmNo >= ALARM_COUNT) {
         Serial.println("syncAlarmFromFirebase: invalid alarm number " + String(alarmNo));
         return false;
@@ -661,23 +674,49 @@ bool syncAlarmFromFirebase(int alarmNo) {
     }
 
     JsonObjectConst alarmObj = doc.as<JsonObjectConst>();
-    int appliedCount = 0;
+    int changedCount = 0;
+    int presentCount = 0;
+    bool present = false;
 
     // Sync only core scheduling and relay fields.
-    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "alarm_hour", 1) ? 1 : 0;
-    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "alarm_minute", 2) ? 1 : 0;
-    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "repeat_count", 3) ? 1 : 0;
-    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "run_minutes", 4) ? 1 : 0;
-    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "idle_minutes", 5) ? 1 : 0;
-    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "day_period", 6) ? 1 : 0;
-    appliedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "relay_no", 7) ? 1 : 0;
+    present = false;
+    changedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "alarm_hour", 1, &present) ? 1 : 0;
+    presentCount += present ? 1 : 0;
 
-    if (appliedCount == 0) {
+    present = false;
+    changedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "alarm_minute", 2, &present) ? 1 : 0;
+    presentCount += present ? 1 : 0;
+
+    present = false;
+    changedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "repeat_count", 3, &present) ? 1 : 0;
+    presentCount += present ? 1 : 0;
+
+    present = false;
+    changedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "run_minutes", 4, &present) ? 1 : 0;
+    presentCount += present ? 1 : 0;
+
+    present = false;
+    changedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "idle_minutes", 5, &present) ? 1 : 0;
+    presentCount += present ? 1 : 0;
+
+    present = false;
+    changedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "day_period", 6, &present) ? 1 : 0;
+    presentCount += present ? 1 : 0;
+
+    present = false;
+    changedCount += applyAlarmParamFromJson(alarmNo, alarmObj, "relay_no", 7, &present) ? 1 : 0;
+    presentCount += present ? 1 : 0;
+
+    if (presentCount == 0) {
         Serial.println("syncAlarmFromFirebase: no syncable fields found for alarm " + String(alarmNo));
         return false;
     }
 
-    Serial.println("syncAlarmFromFirebase: alarm " + String(alarmNo) + " synced, fields applied: " + String(appliedCount));
+    if (changedOut) {
+        *changedOut = (changedCount > 0);
+    }
+
+    Serial.println("syncAlarmFromFirebase: alarm " + String(alarmNo) + " synced, changed fields: " + String(changedCount));
     return true;
 }
 
@@ -698,11 +737,16 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
 
     int requestedCount = 0;
     int successCount = 0;
+    int changedAlarmCount = 0;
 
     if (changedAlarms == 0) {
         requestedCount = 1;
-        if (syncAlarmFromFirebase(0)) {
+        bool hasChanged = false;
+        if (syncAlarmFromFirebase(0, &hasChanged)) {
             successCount++;
+            if (hasChanged) {
+                changedAlarmCount++;
+            }
         }
     } else if (changedAlarms > 0) {
         // Bit mapping: alarm1->bit0, alarm2->bit1, ..., alarmN->bit(N-1).
@@ -710,8 +754,12 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
             int bitMask = (1 << (alarmNo - 1));
             if (changedAlarms & bitMask) {
                 requestedCount++;
-                if (syncAlarmFromFirebase(alarmNo)) {
+                bool hasChanged = false;
+                if (syncAlarmFromFirebase(alarmNo, &hasChanged)) {
                     successCount++;
+                    if (hasChanged) {
+                        changedAlarmCount++;
+                    }
                 }
             }
         }
@@ -721,9 +769,11 @@ void UpdateAlarmParametersFromFireBase(int changedAlarms) {
     }
 
     if (requestedCount > 0 && requestedCount == successCount) {
-        //fbSetIntChecked("Params/Command", -1, "Command_reset");
-        //Serial.println("[FB] UpdateAlarmParameters: sync complete, Command reset to -1");
-        LocalTableUpdatedMessage();
+        if (changedAlarmCount > 0) {
+            LocalTableUpdatedMessage();
+        } else {
+            Serial.println("UpdateAlarmParametersFromFireBase: sync completed but no local field changed.");
+        }
     } else if (requestedCount > 0) {
         Serial.println("UpdateAlarmParametersFromFireBase: partial sync " + String(successCount) + "/" + String(requestedCount));
     }
