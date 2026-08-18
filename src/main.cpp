@@ -883,6 +883,7 @@ void ExecuteCommandFromFirebase()
 
     if (command == -4) {
         refreshPressureDefaultMinLimitFromFirebase();
+        pushover.sendNotification("Pressure default min limit updated from Firebase.");
     }
 
     if (command == -5) {
