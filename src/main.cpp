@@ -67,6 +67,8 @@ int pressureCurrent = 0;
 int pressureMin = 0;
 int pressureMax = 0;
 bool pressureStatsInitialized = false;
+int pressureDefaultMinLimitValue = 0;
+bool pressureDefaultMinLimitRefreshPending = true;
 int pressureLostState = -1; // -1: bilinmiyor, 0: normal, 1: kayip
 long lastPingUpdate = 0;
 
@@ -351,6 +353,26 @@ void FirebaseLastRunDate(int alarmNo) {
 void FirebaseAlarmStatus(int alarmNo, int status) {
     String path = "Alarms/Alarm" + String(alarmNo) + "/alarm_status";
     fbSetIntChecked(path, status, "alarm_status");
+}
+
+void resetPressureMinMaxValues() {
+    pressureMin = 0;
+    pressureMax = 0;
+    pressureStatsInitialized = false;
+    Serial.println("[Pressure] Min/Max reset. Next measurement will establish fresh values.");
+}
+
+bool refreshPressureDefaultMinLimitFromFirebase() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[FB] refreshPressureDefaultMinLimitFromFirebase skip (no WiFi)");
+        return false;
+    }
+
+    int defaultMinLimitValue = fb.getInt("Pressure/DefaultMinLimit");
+    pressureDefaultMinLimitValue = defaultMinLimitValue;
+    pressureDefaultMinLimitRefreshPending = false;
+    Serial.println("[FB] Pressure/DefaultMinLimit refreshed: " + String(pressureDefaultMinLimitValue));
+    return true;
 }
 
 // Faz 2: logAlarmToFirebase kuyruğa yazar (callback bloğu engellemez)
@@ -859,6 +881,30 @@ void ExecuteCommandFromFirebase()
         //return;
     }
 
+    if (command == -4) {
+        refreshPressureDefaultMinLimitFromFirebase();
+    }
+
+    if (command == -5) {
+        fbSetIntChecked("Pressure/Min", pressureMin, "pressure_min");
+        fbSetIntChecked("Pressure/Max", pressureMax, "pressure_max");
+        fbSetIntChecked("Pressure/Current", pressureCurrent, "pressure_current");
+        String pressureMessage = "Pressure min/max/current written to Firebase. _Min ";
+        pressureMessage += String(pressureMin);
+        pressureMessage += ", Max: ";
+        pressureMessage += String(pressureMax);
+        pressureMessage += ", Current: ";
+        pressureMessage += String(pressureCurrent);
+        pushover.sendNotification(pressureMessage);
+    }
+
+    if (command == -6) {
+        resetPressureMinMaxValues();
+        fbSetIntChecked("Pressure/Min", pressureMin, "pressure_min_reset");
+        fbSetIntChecked("Pressure/Max", pressureMax, "pressure_max_reset");
+        pushover.sendNotification("Pressure min/max values reset.");
+    }
+
     // command >-1 ise bu alarm numarasıdır. bu numarayı al ve UpdateAlarmParametersFromFireBase fonksiyonuna gönder. Bu fonksiyon alarm parametrelerini Firebase'den alır ve uygular.
     if (command >= 0 && command < ALARM_COUNT) {
         UpdateAlarmParametersFromFireBase(command);
@@ -941,13 +987,9 @@ void updatePingTime() {
             now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second());
         fbSetStringChecked("Params/pingtime", String(timeStr), "pingtime");
         fbSetStringChecked("Params/ip", WiFi.localIP().toString(), "ip");
-        fbSetIntChecked("Pressure/Current", pressureCurrent, "pressure_current");
-        fbSetIntChecked("Pressure/Min", pressureMin, "pressure_min");
-        fbSetIntChecked("Pressure/Max", pressureMax, "pressure_max");
 
-        int defaultMinLimit = fb.getInt("Pressure/DefaultMinLimit");
-        if (defaultMinLimit > 0) {
-            bool isPressureLost = (averagePressure < defaultMinLimit);
+        if (pressureDefaultMinLimitValue > 0) {
+            bool isPressureLost = (averagePressure < pressureDefaultMinLimitValue);
             int newPressureLostState = isPressureLost ? 1 : 0;
 
             // Ilk degerlendirmede sadece durumu yerlestir; gereksiz bildirim spam'ini onle.
@@ -1218,6 +1260,9 @@ void loop() {
     if (screenOn) {
         String connStatus = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Disconnected";
         if(connStatus == "Connected") {
+            if (pressureDefaultMinLimitRefreshPending) {
+                refreshPressureDefaultMinLimitFromFirebase();
+            }
             ipAddress = WiFi.localIP().toString();
             long rssi = WiFi.RSSI();
             additionalInfo = "RSSI: " + String(rssi);
