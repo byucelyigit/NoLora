@@ -63,6 +63,11 @@ int pressureLimit = 10;
 int pressureMeasureTime = 1000; // 1 second
 int pressureMeasureCount = 3;
 int averagePressure;
+int pressureCurrent = 0;
+int pressureMin = 0;
+int pressureMax = 0;
+bool pressureStatsInitialized = false;
+int pressureLostState = -1; // -1: bilinmiyor, 0: normal, 1: kayip
 long lastPingUpdate = 0;
 
 bool alarmsynced = false;
@@ -936,6 +941,34 @@ void updatePingTime() {
             now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second());
         fbSetStringChecked("Params/pingtime", String(timeStr), "pingtime");
         fbSetStringChecked("Params/ip", WiFi.localIP().toString(), "ip");
+        fbSetIntChecked("Pressure/Current", pressureCurrent, "pressure_current");
+        fbSetIntChecked("Pressure/Min", pressureMin, "pressure_min");
+        fbSetIntChecked("Pressure/Max", pressureMax, "pressure_max");
+
+        int defaultMinLimit = fb.getInt("Pressure/DefaultMinLimit");
+        if (defaultMinLimit > 0) {
+            bool isPressureLost = (averagePressure < defaultMinLimit);
+            int newPressureLostState = isPressureLost ? 1 : 0;
+
+            // Ilk degerlendirmede sadece durumu yerlestir; gereksiz bildirim spam'ini onle.
+            if (pressureLostState == -1) {
+                pressureLostState = newPressureLostState;
+                fbSetIntChecked("Pressure/PressureLost", pressureLostState, "pressure_lost_init");
+            } else if (newPressureLostState != pressureLostState) {
+                pressureLostState = newPressureLostState;
+                fbSetIntChecked("Pressure/PressureLost", pressureLostState, "pressure_lost");
+
+                if (pressureLostState == 1) {
+                    for (int i = 0; i < RELAY_COUNT; i++) {
+                        relay[i].TurnOff(8);
+                    }
+                    pushoverQueueEnqueue("Basinc limiti altina dustu. Sulama durduruldu.");
+                } else {
+                    pushoverQueueEnqueue("Basinc tekrar normal seviyeye cikti.");
+                }
+            }
+        }
+
         SystemStartedMessage();
     }
 }
@@ -1133,6 +1166,20 @@ void loop() {
 
         // Calculate the average pressure
         averagePressure = (pressureReadings[0] + pressureReadings[1] + pressureReadings[2]) / 3;
+        pressureCurrent = averagePressure;
+
+        if (!pressureStatsInitialized) {
+            pressureMin = pressureCurrent;
+            pressureMax = pressureCurrent;
+            pressureStatsInitialized = true;
+        } else {
+            if (pressureCurrent < pressureMin) {
+                pressureMin = pressureCurrent;
+            }
+            if (pressureCurrent > pressureMax) {
+                pressureMax = pressureCurrent;
+            }
+        }
 
         // If the average pressure is below 130, stop all relaysv
         if(CHECK_PRESSURE_LIMIT)
