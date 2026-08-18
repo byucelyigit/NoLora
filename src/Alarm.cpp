@@ -192,15 +192,17 @@ void Alarm::RunCycle(RtcDateTime rtc)
     {
       case Alarm::AlarmStatus::ALARM_STATUS_RUNNING:
         run_remaining_minutes = run_minutes - timeDifferenceMinutes;
-        if (run_remaining_minutes==0)
+                if (run_remaining_minutes <= 0)
         {
+                    run_remaining_minutes = 0;
           alarm_status = Alarm::AlarmStatus::ALARM_STATUS_WAITING;
         }
         break;
       case Alarm::AlarmStatus::ALARM_STATUS_WAITING:
         idle_remaining_minutes = (run_minutes + idle_minutes) - timeDifferenceMinutes;
-        if (idle_remaining_minutes==0)
+                if (idle_remaining_minutes <= 0)
         {
+                    idle_remaining_minutes = 0;
           if(repeat_count_remaining > 1)
           {
             repeat_count_remaining--;
@@ -590,11 +592,11 @@ void Alarm::SetParamValue(int param_no, int param_value, EEPROMClass &eprom)
     case 12:
         //param_name = "Trigger Type";
         trigger_type = param_value;
+                break;
     case 13:
         //param_name = "Alarm Status";
         alarm_status = static_cast<Alarm::AlarmStatus>(param_value);
         break;
-      break;  
     default:
       return; // Invalid parameter number, do nothing
   }

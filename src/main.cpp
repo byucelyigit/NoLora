@@ -537,7 +537,7 @@ void handleSetAlarm() {
         int paramNo = server.arg("paramNo").toInt();
         int paramValue = server.arg("paramValue").toInt();
 
-        if (alarmNo >= 0 && alarmNo <= ALARM_COUNT) {
+        if (alarmNo >= 0 && alarmNo < ALARM_COUNT) {
             if (paramNo >= 1 && paramNo <= PARAMETER_COUNT) { // Ensure paramNo is valid
                 alrm[alarmNo].SetParamValue(paramNo, paramValue, eprom);
                 server.sendHeader("Access-Control-Allow-Origin", "*");
