@@ -172,8 +172,18 @@ void Alarm::RunCycle(RtcDateTime rtc)
 	int clockHr = rtc.Hour();
     long rtcTotalMinutes;
     long timeDifferenceMinutes;
+    rtcTotalMinutes = calculateTotalMinutes(rtc); // Gercek zaman
+
+    RtcDateTime todaySchedule(rtc.Year(), rtc.Month(), rtc.Day(), alarm_hour, alarm_minute, 0);
+    long scheduledTotalMinutes = calculateTotalMinutes(todaySchedule);
+    bool isExactMinute = (clockMin == alarm_minute) && (clockHr == alarm_hour);
+    bool crossedScheduledMinute =
+      (lastRtcTotalMinutesSeen >= 0) &&
+      (lastRtcTotalMinutesSeen < scheduledTotalMinutes) &&
+      (rtcTotalMinutes >= scheduledTotalMinutes);
+
     //Serial.println("Alarm::RunCycle");
-    if((clockMin==alarm_minute) && (clockHr == alarm_hour) && (alarm_status == Alarm::AlarmStatus::ALARM_STATUS_STOPPED))
+    if ((alarm_status == Alarm::AlarmStatus::ALARM_STATUS_STOPPED) && (isExactMinute || crossedScheduledMinute))
     {
         taskStatus = true;
         Serial.println("Alarm::Update:isTrigger");
@@ -183,8 +193,10 @@ void Alarm::RunCycle(RtcDateTime rtc)
         repeat_count_remaining = repeat_count;
         run_remaining_minutes = run_minutes;
         idle_remaining_minutes = idle_minutes;        
-    }        
-    rtcTotalMinutes = calculateTotalMinutes(rtc); //bu rutin sürekli olarak çağrıldığı için buradaki rtc değerini gerçek zaman olarak düşünebiliriz.
+    }
+
+    lastRtcTotalMinutesSeen = rtcTotalMinutes;
+
     //aşağıdaki kod şunu yapar: Her bir iterasyonda alarm yeniden başlamış gibi hesaplaması için iterasyon sayısı ile iterasyon süresi çarpılır.
     timeDifferenceMinutes = rtcTotalMinutes - (rtcAlarmStartTotalMinutes + ((run_minutes + idle_minutes) * (repeat_count - repeat_count_remaining)));            
     //  ****  Log(String(timeDifferenceMinutes), String(rtcTotalMinutes));

@@ -69,6 +69,7 @@ class Alarm
     int total_memory = address(parametre_count) + parametre_count;    
     RtcDateTime alarm_start_time;
     long rtcAlarmStartTotalMinutes; //alarmın başlama zamanının belli bir sıfır noktasına göre dakika cinsinden değeri
+    long lastRtcTotalMinutesSeen = -1; // Bir onceki Update dongusundeki RTC dakikasi
     String previousLog = "";
     static void (*statusChangeCallback)(int alarmNo, AlarmStatus newStatus); // Marked as static
     AlarmStatus oldAlarmStatus = ALARM_STATUS_STOPPED; // 
