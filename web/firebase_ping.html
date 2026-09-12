@@ -76,31 +76,48 @@
 <script>
     const FIREBASE_DB_URL = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/";
 
-    function fetchPingTime() {
-        document.getElementById('errorMsg').textContent = '';
+function fetchPingTime() {
 
-        Promise.all([
-            fetch(FIREBASE_DB_URL + "Params/pingtime.json"),
-            fetch(FIREBASE_DB_URL + "Params/ip.json")
-        ])
-        .then(async ([pingResp, ipResp]) => {
-            if (!pingResp.ok) throw new Error("Ping request failed");
-            if (!ipResp.ok) throw new Error("IP request failed");
+    document.getElementById('errorMsg').textContent = '';
 
-            const pingData = await pingResp.json();
-            const ipData = await ipResp.json();
+    fetch('/api/status')
+        .then(response => {
 
-            document.getElementById('pingValue').textContent = pingData ? pingData : "No data";
-            document.getElementById('ipValue').textContent = ipData ? ipData : "No data";
-            document.getElementById('lastUpdated').textContent = "Last updated: " + new Date().toLocaleTimeString();
+            if (!response.ok) {
+                throw new Error("Status request failed");
+            }
+
+            return response.json();
         })
+
+        .then(data => {
+
+            if (!data.ok) {
+                throw new Error("Status API returned an error");
+            }
+
+            document.getElementById('pingValue').textContent =
+                data.pingtime ?? "No data";
+
+            document.getElementById('ipValue').textContent =
+                data.ip ?? "No data";
+
+            document.getElementById('lastUpdated').textContent =
+                "Last updated: " +
+                new Date().toLocaleTimeString();
+        })
+
         .catch(error => {
+
             document.getElementById('pingValue').textContent = "--";
             document.getElementById('ipValue').textContent = "--";
-            document.getElementById('errorMsg').textContent = "Error fetching data: " + error.message;
+
+            document.getElementById('errorMsg').textContent =
+                "Error fetching data: " + error.message;
+
             document.getElementById('lastUpdated').textContent = "";
         });
-    }
+}
 
     fetchPingTime();
     setInterval(fetchPingTime, 30000);
