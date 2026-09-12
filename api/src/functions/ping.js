@@ -4,22 +4,14 @@ const crypto = require('crypto');
 function secureCompare(a, b) {
     if (!a || !b) return false;
 
-    const aBuffer = Buffer.from(a);
-    const bBuffer = Buffer.from(b);
+    const aBuffer = Buffer.from(a, 'utf8');
+    const bBuffer = Buffer.from(b, 'utf8');
 
     if (aBuffer.length !== bBuffer.length) {
         return false;
     }
 
     return crypto.timingSafeEqual(aBuffer, bBuffer);
-}
-
-function shortHash(value) {
-    return crypto
-        .createHash('sha256')
-        .update(value)
-        .digest('hex')
-        .substring(0, 12);
 }
 
 app.http('ping', {
@@ -42,9 +34,11 @@ app.http('ping', {
             };
         }
 
-        const authHeader = request.headers.get('authorization');
+        // Kendi özel header'ımız
+        const suppliedKey = request.headers.get('x-bridge-key');
 
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // Header hiç gönderilmemiş
+        if (!suppliedKey) {
             return {
                 status: 401,
                 jsonBody: {
@@ -54,24 +48,18 @@ app.http('ping', {
             };
         }
 
-        const suppliedKey = authHeader.substring(7);
-
+        // Header var ama key yanlış
         if (!secureCompare(suppliedKey, expectedKey)) {
             return {
                 status: 403,
                 jsonBody: {
                     ok: false,
-                    error: 'Forbidden',
-
-                    // GEÇİCİ DEBUG BİLGİLERİ
-                    serverLength: expectedKey.length,
-                    clientLength: suppliedKey.length,
-                    serverHash: shortHash(expectedKey),
-                    clientHash: shortHash(suppliedKey)
+                    error: 'Forbidden'
                 }
             };
         }
 
+        // Başarılı
         return {
             status: 200,
             jsonBody: {
