@@ -14,6 +14,14 @@ function secureCompare(a, b) {
     return crypto.timingSafeEqual(aBuffer, bBuffer);
 }
 
+function shortHash(value) {
+    return crypto
+        .createHash('sha256')
+        .update(value)
+        .digest('hex')
+        .substring(0, 12);
+}
+
 app.http('ping', {
     methods: ['GET'],
     authLevel: 'anonymous',
@@ -53,7 +61,13 @@ app.http('ping', {
                 status: 403,
                 jsonBody: {
                     ok: false,
-                    error: 'Forbidden'
+                    error: 'Forbidden',
+
+                    // GEÇİCİ DEBUG BİLGİLERİ
+                    serverLength: expectedKey.length,
+                    clientLength: suppliedKey.length,
+                    serverHash: shortHash(expectedKey),
+                    clientHash: shortHash(suppliedKey)
                 }
             };
         }
