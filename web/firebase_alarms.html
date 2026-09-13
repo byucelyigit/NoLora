@@ -52,17 +52,6 @@
             background-color: #f1f1f1;
         }
 
-        #paramsContainer {
-            width: 100%;
-            max-width: 1200px;
-            margin-top: 20px;
-            text-align: center;
-            font-size: 1.2em;
-        }
-
-        #paramsContainer p {
-            margin: 8px 0;
-        }
 
         @media (max-width: 768px) {
             body {
@@ -109,151 +98,318 @@
         </table>
     </div>
 
-    <div id="paramsContainer">
-        <p><strong>Pressure Max:</strong> <span id="pressureMax">Loading...</span></p>
-        <p><strong>Pressure Min:</strong> <span id="pressureMin">Loading...</span></p>
-        <p><strong>System Time:</strong> <span id="systemTime">Loading...</span></p>
-        <p><strong>Pressure Current:</strong> <span id="pressureCurrent">Loading...</span></p>
-    </div>
+<script>
 
-    <script>
-        const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Alarms.json";
-        const relaysUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/relays.json";
+    async function fetchAlarmData() {
 
-        async function fetchAlarmData() {
-            const tableBody = document.getElementById("alarmTableBody");
-            tableBody.innerHTML = "";
+        const tableBody =
+            document.getElementById("alarmTableBody");
 
-            try {
-                const [alarmsResponse, relaysResponse] = await Promise.all([
-                    fetch(firebaseUrl),
-                    fetch(relaysUrl)
-                ]);
+        tableBody.innerHTML = "";
 
-                if (!alarmsResponse.ok) {
-                    throw new Error(`Failed to fetch alarms: ${alarmsResponse.statusText}`);
-                }
-                if (!relaysResponse.ok) {
-                    throw new Error(`Failed to fetch relays: ${relaysResponse.statusText}`);
-                }
+        try {
 
-                const alarms = await alarmsResponse.json();
-                const relays = await relaysResponse.json();
+            const response =
+                await fetch('/api/alarms');
 
-                for (const [alarmNo, alarm] of Object.entries(alarms)) {
-                    const row = document.createElement("tr");
-                    row.innerHTML = `
-                        <td>${alarmNo}</td>
-                        <td>${mapStatus(alarm.alarm_status)}</td>
-                        <td>${mapFrequency(alarm.day_period)}</td>
-                        <td>${formatTime(alarm.alarm_hour, alarm.alarm_minute)}</td>
-                        <td>${alarm.run_minutes}</td>
-                        <td>${alarm.idle_minutes}</td>
-                        <td>${alarm.repeat_count}</td>
-                        <td>${alarm.repeat_count_remaining || "N/A"}</td>
-                        <td>${alarm.run_remaining_minutes || "N/A"} min</td>
-                        <td>${alarm.idle_remaining_minutes || "N/A"} min</td>
-                        <td>${formatDate(alarm.last_run_date)}</td>
-                        <td>${formatRelayDisplay(alarm.relay_no, relays)}</td>
-                    `;
-                    row.addEventListener("click", () => {
-                        window.location.href = `firebase_edit_alarm.html?alarmNo=${alarmNo}`;
+            if (!response.ok) {
+                throw new Error(
+                    `HTTP ${response.status}`
+                );
+            }
+
+            const result =
+                await response.json();
+
+            if (!result.ok) {
+                throw new Error(
+                    "API returned an error"
+                );
+            }
+
+            const alarms =
+                result.alarms || {};
+
+
+            /*
+             * Alarm0, Alarm1, Alarm2...
+             * şeklinde numerik sırala.
+             */
+            const sortedAlarms =
+                Object.entries(alarms)
+                    .sort(([a], [b]) => {
+
+                        const noA =
+                            parseInt(
+                                a.replace(/\D/g, ''),
+                                10
+                            );
+
+                        const noB =
+                            parseInt(
+                                b.replace(/\D/g, ''),
+                                10
+                            );
+
+                        return noA - noB;
                     });
-                    tableBody.appendChild(row);
-                }
-            } catch (error) {
-                console.error("Error fetching alarms/relays:", error);
+
+
+            for (
+                const [alarmKey, alarm]
+                of sortedAlarms
+            ) {
+
+                const row =
+                    document.createElement("tr");
+
+
+                addCell(
+                    row,
+                    alarmKey
+                );
+
+                addCell(
+                    row,
+                    mapStatus(
+                        alarm.alarm_status
+                    )
+                );
+
+                addCell(
+                    row,
+                    mapFrequency(
+                        alarm.day_period
+                    )
+                );
+
+                addCell(
+                    row,
+                    formatTime(
+                        alarm.alarm_hour,
+                        alarm.alarm_minute
+                    )
+                );
+
+                addCell(
+                    row,
+                    valueOrNA(
+                        alarm.run_minutes
+                    )
+                );
+
+                addCell(
+                    row,
+                    valueOrNA(
+                        alarm.idle_minutes
+                    )
+                );
+
+                addCell(
+                    row,
+                    valueOrNA(
+                        alarm.repeat_count
+                    )
+                );
+
+                addCell(
+                    row,
+                    valueOrNA(
+                        alarm.repeat_count_remaining
+                    )
+                );
+
+                addCell(
+                    row,
+                    formatMinutes(
+                        alarm.run_remaining_minutes
+                    )
+                );
+
+                addCell(
+                    row,
+                    formatMinutes(
+                        alarm.idle_remaining_minutes
+                    )
+                );
+
+                addCell(
+                    row,
+                    formatDate(
+                        alarm.last_run_date
+                    )
+                );
+
+                addCell(
+                    row,
+                    valueOrNA(
+                        alarm.relay_no
+                    )
+                );
+
+
+                /*
+                 * Edit sayfasına giderken
+                 * Alarm0 / Alarm1 / Alarm2 anahtarını gönder.
+                 */
+                row.addEventListener(
+                    "click",
+                    () => {
+
+                        window.location.href =
+                            `firebase_edit_alarm.html?alarmNo=${encodeURIComponent(alarmKey)}`;
+                    }
+                );
+
+
+                tableBody.appendChild(row);
             }
+
+        }
+        catch (error) {
+
+            console.error(
+                "Alarm loading error:",
+                error
+            );
+
+            const row =
+                document.createElement("tr");
+
+            const cell =
+                document.createElement("td");
+
+            cell.colSpan = 12;
+
+            cell.textContent =
+                "Error loading alarms: " +
+                error.message;
+
+            cell.style.color = "#dc3545";
+
+            row.appendChild(cell);
+
+            tableBody.appendChild(row);
+        }
+    }
+
+
+    function addCell(row, value) {
+
+        const cell =
+            document.createElement("td");
+
+        cell.textContent =
+            value ?? "N/A";
+
+        row.appendChild(cell);
+    }
+
+
+    function valueOrNA(value) {
+
+        return (
+            value === undefined ||
+            value === null ||
+            value === ""
+        )
+            ? "N/A"
+            : value;
+    }
+
+
+    function formatMinutes(value) {
+
+        return (
+            value === undefined ||
+            value === null
+        )
+            ? "N/A"
+            : `${value} min`;
+    }
+
+
+    function mapStatus(status) {
+
+        switch (status) {
+
+            case 0:
+                return "Stopped";
+
+            case 1:
+                return "Running";
+
+            case 2:
+                return "Waiting";
+
+            default:
+                return "Unknown";
+        }
+    }
+
+
+    function mapFrequency(dayPeriod) {
+
+        switch (dayPeriod) {
+
+            case 0:
+                return "Off";
+
+            case 1:
+                return "Everyday";
+
+            case 2:
+                return "Day After";
+
+            case 3:
+                return "Two Days After";
+
+            default:
+                return `${dayPeriod} Days`;
+        }
+    }
+
+
+    function formatTime(hour, minute) {
+
+        if (
+            hour === undefined ||
+            minute === undefined
+        ) {
+            return "N/A";
         }
 
-        function mapStatus(status) {
-            switch (status) {
-                case 0: return "Stopped";
-                case 1: return "Running";
-                case 2: return "Waiting";
-                default: return "Unknown";
-            }
+        return (
+            `${String(hour).padStart(2, '0')}:` +
+            `${String(minute).padStart(2, '0')}`
+        );
+    }
+
+
+    function formatDate(value) {
+
+        if (!value) {
+            return "N/A";
         }
 
-        function mapFrequency(dayPeriod) {
-            switch (dayPeriod) {
-                case 0: return "Off";
-                case 1: return "Everyday";
-                case 2: return "Day After";
-                case 3: return "Two Days After";
-                default: return `${dayPeriod} Days`;
-            }
+        const parts =
+            String(value).split("-");
+
+        if (parts.length !== 3) {
+            return value;
         }
 
-        function formatTime(hour, minute) {
-            return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        }
+        return (
+            `${parts[2]}/` +
+            `${parts[1]}/` +
+            `${parts[0]}`
+        );
+    }
 
-        function formatDate(lastRunDate) {
-            if (!lastRunDate) return "N/A";
-            const [year, month, day] = lastRunDate.split("-");
-            return `${day}/${month}/${year}`;
-        }
 
-        function formatRelayDisplay(relayNo, relays) {
-            if (relayNo === undefined || relayNo === null) return "N/A";
+    window.onload =
+        fetchAlarmData;
 
-            const relayNoInt = parseInt(relayNo, 10);
-            if (Number.isNaN(relayNoInt)) return String(relayNo);
-
-            const description = resolveRelayDescription(relayNoInt, relays);
-            return description ? `${relayNoInt} (${description})` : String(relayNoInt);
-        }
-
-        function resolveRelayDescription(relayNo, relays) {
-            if (!relays || typeof relays !== "object") return "";
-
-            const relayKey = `relay${relayNo - 1}`;
-            const relayValue = relays[relayKey];
-
-            if (relayValue === undefined || relayValue === null) return "";
-
-            if (typeof relayValue === "string" || typeof relayValue === "number" || typeof relayValue === "boolean") {
-                return String(relayValue);
-            }
-
-            if (typeof relayValue === "object") {
-                return relayValue.name || relayValue.label || relayValue.description || relayValue.title || "";
-            }
-
-            return "";
-        }
-
-        async function fetchParams() {
-            const paramsUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Params.json";
-            const pressureCurrentUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Pressure/Current.json";
-
-            try {
-                const response = await fetch(paramsUrl);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch params: ${response.statusText}`);
-                }
-                const params = await response.json();
-
-                document.getElementById("pressureMax").textContent = params.PressureMax || "N/A";
-                document.getElementById("pressureMin").textContent = params.PressureMin || "N/A";
-                document.getElementById("systemTime").textContent = params.SystemTime || "N/A";
-
-                const pressureResponse = await fetch(pressureCurrentUrl);
-                if (!pressureResponse.ok) {
-                    throw new Error(`Failed to fetch current pressure: ${pressureResponse.statusText}`);
-                }
-                const pressureCurrent = await pressureResponse.json();
-                document.getElementById("pressureCurrent").textContent = pressureCurrent || "N/A";
-            } catch (error) {
-                console.error("Error fetching params or pressure:", error);
-            }
-        }
-
-        window.onload = () => {
-            fetchAlarmData();
-            fetchParams();
-        };
-    </script>
+</script>
 </body>
 </html>
