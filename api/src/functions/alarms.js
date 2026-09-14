@@ -75,6 +75,7 @@ app.http('alarms', {
                 jsonBody: {
                     ok: true,
                     alarms: alarms || {}
+                    relays: relays || {}
                 }
             };
 
