@@ -69,9 +69,11 @@ app.http('alarms', {
 
             return {
                 status: 200,
+
                 headers: {
                     'Cache-Control': 'no-store'
                 },
+
                 jsonBody: {
                     ok: true,
                     alarms: alarms || {},
@@ -87,19 +89,18 @@ app.http('alarms', {
                 error
             );
 
-        return {
-            status: 200,
+            return {
+                status: 500,
 
-            headers: {
-                'Cache-Control': 'no-store'
-            },
+                headers: {
+                    'Cache-Control': 'no-store'
+                },
 
-            jsonBody: {
-                ok: true,
-                alarms: alarms || {},
-                relays: relays || {}
-            }
-        };
+                jsonBody: {
+                    ok: false,
+                    error: 'Unable to read alarms'
+                }
+            };
         }
     }
 });
