@@ -1,0 +1,19 @@
+{
+  "routes": [
+    {
+      "route": "/firebase_edit_alarm.html",
+      "allowedRoles": ["kurudere_admin"]
+    },
+    {
+      "route": "/api/alarm",
+      "methods": ["GET", "PUT"],
+      "allowedRoles": ["kurudere_admin"]
+    }
+  ],
+  "responseOverrides": {
+    "401": {
+      "statusCode": 302,
+      "redirect": "/.auth/login/aad"
+    }
+  }
+}
