@@ -96,133 +96,339 @@
     </form>
 
     <script>
-        const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Alarms";
-        const firebaseParamsUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/Params";
-        const urlParams = new URLSearchParams(window.location.search);
-        const alarmNo = urlParams.get("alarmNo");
 
-        async function fetchAlarmDetails() {
-            try {
-                const response = await fetch(`${firebaseUrl}/${alarmNo}.json`);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch alarm: ${response.statusText}`);
-                }
-                const alarm = await response.json();
-                document.getElementById("alarmStatus").value = alarm.alarm_status;
-                document.getElementById("dayPeriod").value = alarm.day_period;
-                document.getElementById("alarmHour").value = alarm.alarm_hour;
-                document.getElementById("alarmMinute").value = alarm.alarm_minute;
-                document.getElementById("runMinutes").value = alarm.run_minutes;
-                document.getElementById("idleMinutes").value = alarm.idle_minutes;
-                document.getElementById("repeatCount").value = alarm.repeat_count;
-                document.getElementById("repeatCountRemaining").value = alarm.repeat_count_remaining || 0;
-                document.getElementById("runRemainingMinutes").value = alarm.run_remaining_minutes || 0;
-                document.getElementById("idleRemainingMinutes").value = alarm.idle_remaining_minutes || 0;
-                document.getElementById("lastRunDate").value = alarm.last_run_date || "";
-                document.getElementById("relayNo").value = alarm.relay_no || 0;
-            } catch (error) {
-                console.error("Error fetching alarm details:", error);
+    const urlParams =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    const alarmNo =
+        urlParams.get("alarmNo");
+
+
+    /*
+     * Alarm oku
+     */
+    async function fetchAlarmDetails() {
+
+        try {
+
+            const response =
+                await fetch(
+                    `/api/alarm?alarmNo=${encodeURIComponent(alarmNo)}`
+                );
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `HTTP ${response.status}`
+                );
             }
+
+
+            const result =
+                await response.json();
+
+
+            if (!result.ok) {
+
+                throw new Error(
+                    result.error ||
+                    "Unable to read alarm"
+                );
+            }
+
+
+            const alarm =
+                result.alarm;
+
+
+            document.getElementById(
+                "alarmStatus"
+            ).value =
+                alarm.alarm_status;
+
+
+            document.getElementById(
+                "dayPeriod"
+            ).value =
+                alarm.day_period;
+
+
+            document.getElementById(
+                "alarmHour"
+            ).value =
+                alarm.alarm_hour;
+
+
+            document.getElementById(
+                "alarmMinute"
+            ).value =
+                alarm.alarm_minute;
+
+
+            document.getElementById(
+                "runMinutes"
+            ).value =
+                alarm.run_minutes;
+
+
+            document.getElementById(
+                "idleMinutes"
+            ).value =
+                alarm.idle_minutes;
+
+
+            document.getElementById(
+                "repeatCount"
+            ).value =
+                alarm.repeat_count;
+
+
+            document.getElementById(
+                "repeatCountRemaining"
+            ).value =
+                alarm.repeat_count_remaining ?? 0;
+
+
+            document.getElementById(
+                "runRemainingMinutes"
+            ).value =
+                alarm.run_remaining_minutes ?? 0;
+
+
+            document.getElementById(
+                "idleRemainingMinutes"
+            ).value =
+                alarm.idle_remaining_minutes ?? 0;
+
+
+            document.getElementById(
+                "lastRunDate"
+            ).value =
+                alarm.last_run_date || "";
+
+
+            document.getElementById(
+                "relayNo"
+            ).value =
+                alarm.relay_no ?? 0;
+
         }
+        catch (error) {
 
-        async function saveAlarmDetails() {
-            const updatedAlarm = {
-                alarm_status: parseInt(document.getElementById("alarmStatus").value),
-                day_period: parseInt(document.getElementById("dayPeriod").value),
-                alarm_hour: parseInt(document.getElementById("alarmHour").value),
-                alarm_minute: parseInt(document.getElementById("alarmMinute").value),
-                run_minutes: parseInt(document.getElementById("runMinutes").value),
-                idle_minutes: parseInt(document.getElementById("idleMinutes").value),
-                repeat_count: parseInt(document.getElementById("repeatCount").value),
-                repeat_count_remaining: parseInt(document.getElementById("repeatCountRemaining").value),
-                run_remaining_minutes: parseInt(document.getElementById("runRemainingMinutes").value),
-                idle_remaining_minutes: parseInt(document.getElementById("idleRemainingMinutes").value),
-                last_run_date: document.getElementById("lastRunDate").value,
-                relay_no: parseInt(document.getElementById("relayNo").value),
-            };
+            console.error(
+                "Alarm load error:",
+                error
+            );
 
-            const resolveAlarmNumber = (rawAlarmNo, alarmPayload) => {
-                const direct = parseInt(rawAlarmNo, 10);
-                if (!Number.isNaN(direct)) return direct;
+            alert(
+                "Alarm bilgisi alınamadı."
+            );
+        }
+    }
 
-                const text = String(rawAlarmNo || "");
-                const digitsMatch = text.match(/\d+/);
-                if (digitsMatch) {
-                    const fromKey = parseInt(digitsMatch[0], 10);
-                    if (!Number.isNaN(fromKey)) return fromKey;
-                }
 
-                const payloadNumber = parseInt(alarmPayload?.alarm_no ?? alarmPayload?.alarmno, 10);
-                return Number.isNaN(payloadNumber) ? NaN : payloadNumber;
-            };
+    /*
+     * Alarm kaydet
+     */
+    async function saveAlarmDetails() {
 
-            try {
-                const currentAlarmResponse = await fetch(`${firebaseUrl}/${alarmNo}.json`);
-                if (!currentAlarmResponse.ok) {
-                    throw new Error(`Failed to fetch current alarm: ${currentAlarmResponse.statusText}`);
-                }
-                const currentAlarm = await currentAlarmResponse.json();
-                const hasAlarmChanged = Object.keys(updatedAlarm).some((key) => updatedAlarm[key] !== currentAlarm[key]);
+        const updatedAlarm = {
 
-                const response = await fetch(`${firebaseUrl}/${alarmNo}.json`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(updatedAlarm),
-                });
-                if (!response.ok) {
-                    throw new Error(`Failed to save alarm: ${response.statusText}`);
-                }
+            alarm_status:
+                parseInt(
+                    document.getElementById(
+                        "alarmStatus"
+                    ).value,
+                    10
+                ),
 
-                // Web UI never writes -1; ESP32 is responsible for resetting ChangedAlarms to -1.
-                if (hasAlarmChanged) {
-                    const alarmNoInt = resolveAlarmNumber(alarmNo, currentAlarm);
-                    if (Number.isNaN(alarmNoInt) || alarmNoInt < 0) {
-                        throw new Error(`Invalid alarm number for bitmask: ${alarmNo}`);
-                    }
+            day_period:
+                parseInt(
+                    document.getElementById(
+                        "dayPeriod"
+                    ).value,
+                    10
+                ),
 
-                    const currentChangeValue = alarmNoInt === 0 ? 0 : (1 << (alarmNoInt - 1));
-                    let changedAlarmsValue = 0;
+            alarm_hour:
+                parseInt(
+                    document.getElementById(
+                        "alarmHour"
+                    ).value,
+                    10
+                ),
 
-                    if (currentChangeValue === 0) {
-                        changedAlarmsValue = 0;
-                    } else {
-                        const changedReadResponse = await fetch(`${firebaseParamsUrl}/Command.json`);
-                        if (!changedReadResponse.ok) {
-                            throw new Error(`Failed to read ChangedAlarms: ${changedReadResponse.statusText}`);
-                        }
+            alarm_minute:
+                parseInt(
+                    document.getElementById(
+                        "alarmMinute"
+                    ).value,
+                    10
+                ),
 
-                        const existingChanged = await changedReadResponse.json();
-                        const parsedExistingMask = parseInt(existingChanged, 10);
-                        const existingMask = Number.isNaN(parsedExistingMask) || parsedExistingMask < 0 ? 0 : parsedExistingMask;
-                        changedAlarmsValue = existingMask | currentChangeValue;
-                    }
+            run_minutes:
+                parseInt(
+                    document.getElementById(
+                        "runMinutes"
+                    ).value,
+                    10
+                ),
 
-                    const changedResponse = await fetch(`${firebaseParamsUrl}/Command.json`, {
+            idle_minutes:
+                parseInt(
+                    document.getElementById(
+                        "idleMinutes"
+                    ).value,
+                    10
+                ),
+
+            repeat_count:
+                parseInt(
+                    document.getElementById(
+                        "repeatCount"
+                    ).value,
+                    10
+                ),
+
+            repeat_count_remaining:
+                parseInt(
+                    document.getElementById(
+                        "repeatCountRemaining"
+                    ).value,
+                    10
+                ),
+
+            run_remaining_minutes:
+                parseInt(
+                    document.getElementById(
+                        "runRemainingMinutes"
+                    ).value,
+                    10
+                ),
+
+            idle_remaining_minutes:
+                parseInt(
+                    document.getElementById(
+                        "idleRemainingMinutes"
+                    ).value,
+                    10
+                ),
+
+            last_run_date:
+                document.getElementById(
+                    "lastRunDate"
+                ).value,
+
+            relay_no:
+                parseInt(
+                    document.getElementById(
+                        "relayNo"
+                    ).value,
+                    10
+                )
+        };
+
+
+        const saveButton =
+            document.getElementById(
+                "saveButton"
+            );
+
+
+        try {
+
+            saveButton.disabled = true;
+            saveButton.textContent =
+                "Saving...";
+
+
+            const response =
+                await fetch(
+                    `/api/alarm?alarmNo=${encodeURIComponent(alarmNo)}`,
+                    {
                         method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(changedAlarmsValue),
-                    });
-                    if (!changedResponse.ok) {
-                        throw new Error(`Failed to update Command: ${changedResponse.statusText}`);
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify(
+                                updatedAlarm
+                            )
                     }
-                }
+                );
 
-                //alert("Alarm updated successfully!");
-                window.location.href = "firebase_alarms.html";
-            } catch (error) {
-                console.error("Error saving alarm details:", error);
+
+            const result =
+                await response.json();
+
+
+            if (
+                !response.ok ||
+                !result.ok
+            ) {
+
+                throw new Error(
+                    result.error ||
+                    `HTTP ${response.status}`
+                );
             }
-        }
 
-        document.getElementById("saveButton").addEventListener("click", saveAlarmDetails);
 
-        // Fetch alarm details on page load
-        if (alarmNo) {
-            fetchAlarmDetails();
-        } else {
-            alert("No alarm number provided!");
-            window.location.href = "firebase_alarms.html";
+            window.location.href =
+                "firebase_alarms.html";
+
         }
-    </script>
+        catch (error) {
+
+            console.error(
+                "Alarm save error:",
+                error
+            );
+
+
+            alert(
+                "Alarm kaydedilemedi: " +
+                error.message
+            );
+
+
+            saveButton.disabled =
+                false;
+
+            saveButton.textContent =
+                "Save";
+        }
+    }
+
+
+    document.getElementById(
+        "saveButton"
+    ).addEventListener(
+        "click",
+        saveAlarmDetails
+    );
+
+
+    if (alarmNo) {
+
+        fetchAlarmDetails();
+
+    } else {
+
+        alert(
+            "No alarm number provided!"
+        );
+
+        window.location.href =
+            "firebase_alarms.html";
+    }
+
+</script>
 </body>
 </html>
