@@ -28,19 +28,21 @@ async function firebaseLogin() {
 }
 
 
-async function readAlarms(idToken) {
+async function firebaseRead(path, idToken) {
 
     const dbUrl =
         process.env.FIREBASE_DB_URL.replace(/\/+$/, '');
 
     const response = await fetch(
-        `${dbUrl}/Alarms.json?auth=${encodeURIComponent(idToken)}`
+        `${dbUrl}/${path}.json?auth=${encodeURIComponent(idToken)}`
     );
 
     const result = await response.json();
 
     if (!response.ok) {
-        throw new Error('Firebase Alarms read failed');
+        throw new Error(
+            `Firebase read failed: ${path}`
+        );
     }
 
     return result;
@@ -59,8 +61,11 @@ app.http('alarms', {
             const idToken =
                 await firebaseLogin();
 
-            const alarms =
-                await readAlarms(idToken);
+            const [alarms, relays] =
+                await Promise.all([
+                    firebaseRead('Alarms', idToken),
+                    firebaseRead('relays', idToken)
+                ]);
 
             return {
                 status: 200,
@@ -81,13 +86,19 @@ app.http('alarms', {
                 error
             );
 
-            return {
-                status: 500,
-                jsonBody: {
-                    ok: false,
-                    error: 'Unable to read alarms'
-                }
-            };
+        return {
+            status: 200,
+
+            headers: {
+                'Cache-Control': 'no-store'
+            },
+
+            jsonBody: {
+                ok: true,
+                alarms: alarms || {},
+                relays: relays || {}
+            }
+        };
         }
     }
 });

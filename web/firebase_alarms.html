@@ -130,6 +130,9 @@
             const alarms =
                 result.alarms || {};
 
+            const relays =
+                result.relays || {};
+
 
             /*
              * Alarm0, Alarm1, Alarm2...
@@ -242,8 +245,9 @@
 
                 addCell(
                     row,
-                    valueOrNA(
-                        alarm.relay_no
+                    formatRelayDisplay(
+                        alarm.relay_no,
+                        relays
                     )
                 );
 
@@ -291,6 +295,88 @@
 
             tableBody.appendChild(row);
         }
+    }
+
+
+    function formatRelayDisplay(relayNo, relays) {
+
+        if (
+            relayNo === undefined ||
+            relayNo === null
+        ) {
+            return "N/A";
+        }
+
+        const no =
+            parseInt(relayNo, 10);
+
+        if (Number.isNaN(no)) {
+            return String(relayNo);
+        }
+
+        /*
+        * Alarm relay_no = 1 ise
+        * Firebase'de relay0 kullanılıyor.
+        */
+        const relayKey =
+            `relay${no - 1}`;
+
+        const relay =
+            relays[relayKey];
+
+        const description =
+            getRelayDescription(relay);
+
+        return description
+            ? `${no} (${description})`
+            : String(no);
+    }
+
+
+    function getRelayDescription(relay) {
+
+        if (
+            relay === undefined ||
+            relay === null
+        ) {
+            return "";
+        }
+
+        /*
+        * relay0: "Domates, Biber"
+        */
+        if (
+            typeof relay === "string" ||
+            typeof relay === "number"
+        ) {
+            return String(relay);
+        }
+
+        /*
+        * relay0: ["Domates", "Biber"]
+        */
+        if (Array.isArray(relay)) {
+            return relay.join(", ");
+        }
+
+        /*
+        * relay0: {
+        *     description: "Domates, Biber"
+        * }
+        */
+        if (typeof relay === "object") {
+
+            return (
+                relay.plants ||
+                relay.name ||
+                relay.description ||
+                relay.label ||
+                relay.title ||
+                ""
+            );
+        }
+
+        return "";
     }
 
 
