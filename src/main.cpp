@@ -1146,7 +1146,7 @@ void setup(){
     }
 
   	u8g2.begin();
-  	u8g2.setDisplayRotation(U8G2_R2);
+    u8g2.setDisplayRotation(U8G2_R0);
   	u8g2.setFont(u8g2_font_8x13_tr);	
 	
 	// This tells the library that the encoder has its own pull-up resistors
