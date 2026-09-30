@@ -37,16 +37,16 @@ const String REFERENCE_URL = "https://send-kurudere-messages-default-rtdb.europe
 
 const uint8_t DI_ENCODER_A   = 13;
 const uint8_t DI_ENCODER_B   = 14;
-const uint8_t RELAY1   = 25;
-const uint8_t RELAY2   = 27;
-const uint8_t RELAY3   = 26;
-const uint8_t RELAY4   = 2;
+const uint8_t RELAY1   = 27;
+const uint8_t RELAY2   = 26;
+const uint8_t RELAY3   = 25;
+const uint8_t RELAY4   = 33;
 
-const uint8_t BUTTON1_ENTER = 34;
+const uint8_t BUTTON1_ENTER = 32;
 const uint8_t BUTTON2_EXIT = 36; 
-const uint8_t PRESSURE_ANALOG = 35;
+const uint8_t PRESSURE_ANALOG = 34;
 const uint8_t CLOCK_IO = 18;
-const uint8_t CLOCK_SCL = 5;
+const uint8_t CLOCK_SCL = 23;
 const uint8_t CLOCK_RST = 19;
 
 bool button1_enter_Pressed = false;
