@@ -1,6 +1,5 @@
 #include <U8g2lib.h>
 #include <SPI.h>
-#include <ESP32RotaryEncoder.h>
 #include <RtcDS1302.h>
 #include <relay.h>
 #include <Alarm.h>
@@ -35,22 +34,18 @@ const char* password = "87973341";
 const String REFERENCE_URL = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/";
 
 
-const uint8_t DI_ENCODER_A   = 13;
-const uint8_t DI_ENCODER_B   = 14;
 const uint8_t RELAY1   = 27;
 const uint8_t RELAY2   = 26;
 const uint8_t RELAY3   = 25;
 const uint8_t RELAY4   = 33;
 
 const uint8_t BUTTON1_ENTER = 32;
-const uint8_t BUTTON2_EXIT = 36; 
 const uint8_t PRESSURE_ANALOG = 34;
 const uint8_t CLOCK_IO = 18;
 const uint8_t CLOCK_SCL = 23;
 const uint8_t CLOCK_RST = 19;
 
 bool button1_enter_Pressed = false;
-bool button2_exit_pressed = false;
 
 int alarmHr = 21;
 int alarmMin = 00;
@@ -74,6 +69,92 @@ long lastPingUpdate = 0;
 
 bool alarmsynced = false;
 bool systemStartedMsgSent = false;
+
+enum InfoPage : uint8_t {
+    INFO_TIME = 0,
+    INFO_DATE,
+    INFO_RSSI,
+    INFO_IP,
+    INFO_RELAYS,
+    INFO_PRESSURE,
+    INFO_PAGE_COUNT
+};
+
+InfoPage currentInfoPage = INFO_TIME;
+unsigned long lastButtonPress = 0;
+unsigned long buttonStateChangedAt = 0;
+bool screenOn = true;
+
+extern U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2;
+extern Relay relay[];
+
+void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
+    char value[32];
+    String ipAddress = WiFi.localIP().toString();
+    int activeRelayCount = 0;
+
+    for (int i = 0; i < RELAY_COUNT; i++) {
+        if (relay[i].status == Relay::RELAY_ON) {
+            activeRelayCount++;
+        }
+    }
+
+    u8g2.firstPage();
+    do {
+        u8g2.setFont(u8g2_font_7x13B_mf);
+
+        switch (page) {
+            case INFO_TIME:
+                snprintf(value, sizeof(value), "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
+                u8g2.drawStr(0, 13, "Saat");
+                u8g2.setFont(u8g2_font_helvB24_tr);
+                u8g2.drawStr(0, 48, value);
+                break;
+            case INFO_DATE:
+                snprintf(value, sizeof(value), "%02u/%02u/%04u", now.Day(), now.Month(), now.Year());
+                u8g2.drawStr(0, 13, "Tarih");
+                u8g2.setFont(u8g2_font_helvB18_tr);
+                u8g2.drawStr(0, 43, value);
+                break;
+            case INFO_RSSI:
+                snprintf(value, sizeof(value), "%ld dBm", WiFi.RSSI());
+                u8g2.drawStr(0, 13, "RSSI");
+                u8g2.setFont(u8g2_font_helvB24_tr);
+                u8g2.drawStr(0, 48, value);
+                break;
+            case INFO_IP:
+                u8g2.drawStr(0, 13, "IP");
+                u8g2.setFont(u8g2_font_7x13B_mf);
+                u8g2.drawStr(0, 35, WiFi.status() == WL_CONNECTED ? ipAddress.c_str() : "Baglanti yok");
+                break;
+            case INFO_RELAYS:
+                u8g2.drawStr(0, 13, "Acik roleler");
+                u8g2.setFont(u8g2_font_helvB24_tr);
+                if (activeRelayCount == 0) {
+                    u8g2.drawStr(0, 48, "Yok");
+                } else {
+                    int x = 0;
+                    u8g2.setFont(u8g2_font_7x13B_mf);
+                    for (int i = 0; i < RELAY_COUNT; i++) {
+                        if (relay[i].status == Relay::RELAY_ON) {
+                            snprintf(value, sizeof(value), "R%d ", i + 1);
+                            u8g2.drawStr(x, 38, value);
+                            x += 22;
+                        }
+                    }
+                }
+                break;
+            case INFO_PRESSURE:
+                snprintf(value, sizeof(value), "%d", pressure);
+                u8g2.drawStr(0, 13, "Basinc");
+                u8g2.setFont(u8g2_font_helvB24_tr);
+                u8g2.drawStr(0, 48, value);
+                break;
+            default:
+                break;
+        }
+    } while (u8g2.nextPage());
+}
 
 
 
@@ -222,7 +303,6 @@ EEPROMClass eprom;
 
 Pushover pushover;
 
-RotaryEncoder rotaryEncoder( DI_ENCODER_A, DI_ENCODER_B );
 
 U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
@@ -236,8 +316,6 @@ Relay relay[] = {Relay(0, RELAY1), Relay(1, RELAY2), Relay(2, RELAY3), Relay(3, 
 
 WebServer server(80);
 
-unsigned long lastInteractionTime = 0; // Tracks the last interaction time
-bool screenOn = true;
 
 void printMessage(String payload, int x, int y) {
   int lenString = payload.length();
@@ -256,31 +334,6 @@ int measurePressure() {
 	//printMessage(myString, 0, 38);
 	//delay(100); 
 }
-
-void knobCallback(long value) {
-    lastInteractionTime = millis(); // Reset the last interaction time on knob turn    
-    switch (page_no) {
-        case Display::Page::PAGE_ALARM_LIST:
-            alarm_no = value;
-            break;
-        case Display::Page::PAGE_PARAM_LIST:
-            param_no = value;
-            break;
-        case Display::Page::PAGE_PARAM_VALUE:
-            // Handle PARAM_VALUE case if needed
-            param_value = value;
-            break;
-        case Display::Page::PAGE_MANUAL:
-            // Handle MANUAL case if needed
-            functionNo = value;
-            //relay_no = value;
-            break;    
-        default:
-            // Handle default case if needed
-            break;
-    }
-}
-
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
@@ -453,15 +506,15 @@ void onRelayStateChange(int relayNo, bool isOn, int reason) {
     fbQueueEnqueuePushString(logPathBuf, logMessage);
     Serial.println("[FB] Queued relay log: " + logMessage);
 
-    // Faz 1+3: relays/status güncellemesi — geçersiz değer (<=0) koruması ile
+    // Faz 1+3: relays/status guncellemesi - gecersiz deger (<=0) korumasi ile
     //if (WiFi.status() != WL_CONNECTED) {
     //    Serial.println("[FB] relays/status skip (no WiFi)");
     //    return;
     //}
-    // Kutuphanenin getInt(path) tek arguman döner, 0 hem gecersiz hem de gecerli deger olabilir;
-    // WiFi kontrolunu yukarida yaptik, bu noktada bagliyz demek.
+    // Kutuphanenin getInt(path) tek arguman doner, 0 hem gecersiz hem de gecerli deger olabilir;
+    // WiFi kontrolunu yukarida yaptik, bu noktada bagliyiz demek.
     //int relayStatusVal = fb.getInt("relays/status");
-    //if (relayStatusVal < 0) relayStatusVal = 0; // Faz 1 bug fix: gecersiz deger koruması
+    //if (relayStatusVal < 0) relayStatusVal = 0;
     //if (isOn) {
     //    relayStatusVal |= (1 << relayNo);
     //} else {
@@ -1123,13 +1176,15 @@ void setup(){
     //RtcDateTime tt =  RtcDateTime(2021, 1, 1,20, 59, 50);
     //Rtc.SetDateTime(tt);
 
-   	pinMode (BUTTON1_ENTER, INPUT);
-   	pinMode (BUTTON2_EXIT,INPUT);
+   	pinMode (BUTTON1_ENTER, INPUT_PULLUP);
    	pinMode (PRESSURE_ANALOG,INPUT);
 	pinMode(RELAY1, OUTPUT);	
     pinMode(RELAY2, OUTPUT);	
     pinMode(RELAY3, OUTPUT);	
     pinMode(RELAY4, OUTPUT);	
+    button1_enter_Pressed = digitalRead(BUTTON1_ENTER) == LOW;
+    buttonStateChangedAt = millis();
+    lastButtonPress = millis();
 
     // aşağıda daha önceki değerlerin yüklenmesi işlemi yapılır. ilk defa değerler yazıldıktan sonra yukarıdaki satırlar kapatılır ve
     // sadece aşağıdakiler ile okuma yapması sağlanır.
@@ -1147,30 +1202,7 @@ void setup(){
 
   	u8g2.begin();
     u8g2.setDisplayRotation(U8G2_R0);
-  	u8g2.setFont(u8g2_font_8x13_tr);	
-	
-	// This tells the library that the encoder has its own pull-up resistors
-	rotaryEncoder.setEncoderType( EncoderType::FLOATING );
-
-    lastInteractionTime = millis(); // Initialize the last interaction time
-
-	// Range of values to be returned by the encoder: minimum is 1, maximum is 10
-	// The third argument specifies whether turning past the minimum/maximum will
-	// wrap around to the other side:
-	//  - true  = turn past 10, wrap to 1; turn past 1, wrap to 10
-	//  - false = turn past 10, stay on 10; turn past 1, stay on 1
-	rotaryEncoder.setBoundaries(1, 8, true );
-
-	// The function specified here will be called every time the knob is turned
-	// and the current value will be passed to it
-	rotaryEncoder.onTurned( &knobCallback );
-
-	// The function specified here will be called every time the button is pushed and
-	// the duration (in milliseconds) that the button was down will be passed to it
-	// rotaryEncoder.onPressed( &buttonCallback );
-
-	// This is where the inputs are configured and the interrupts get attached
-	rotaryEncoder.begin();
+       u8g2.setFont(u8g2_font_8x13_tr);
 	
 	printMessage("Ready.", 0, 16);
 
@@ -1194,10 +1226,25 @@ void loop() {
 
     unsigned long currentMillis = millis();
 
-    // Turn off the screen after 10 seconds of inactivity
-    if (currentMillis - lastInteractionTime >= 90000) {
-        //Serial.println("Screen off");
-        u8g2.setPowerSave(1); // Turn off the display
+    bool buttonIsPressed = digitalRead(BUTTON1_ENTER) == LOW;
+    if (buttonIsPressed != button1_enter_Pressed && currentMillis - buttonStateChangedAt >= 50) {
+        buttonStateChangedAt = currentMillis;
+        button1_enter_Pressed = buttonIsPressed;
+
+        if (buttonIsPressed) {
+            bool wasScreenOn = screenOn;
+            screenOn = true;
+            lastButtonPress = currentMillis;
+            u8g2.setPowerSave(0);
+
+            if (wasScreenOn) {
+                currentInfoPage = static_cast<InfoPage>((currentInfoPage + 1) % INFO_PAGE_COUNT);
+            }
+        }
+    }
+
+    if (screenOn && currentMillis - lastButtonPress >= 60000) {
+        u8g2.setPowerSave(1);
         screenOn = false;
     }
 
@@ -1235,15 +1282,6 @@ void loop() {
         }
     }
 
-    // Reset inactivity timer on button press or rotary encoder interaction
-    if (digitalRead(BUTTON2_EXIT) == 0) {
-        lastInteractionTime = currentMillis;
-        if (!screenOn) {
-            u8g2.setPowerSave(0); // Turn on the display
-            screenOn = true;
-        }
-    }
-
     // Example: Print JSON representation of the first alarm
     if (Serial.available()) {
         char command = Serial.read();
@@ -1256,32 +1294,12 @@ void loop() {
     //performMDNSLookup("example.local"); // Replace "example.local" with the desired mDNS hostname
 
     RtcDateTime now = Rtc.GetDateTime();
-    String ipAddress = "";
-    String additionalInfo = "";
-    if (screenOn) {
-        String connStatus = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Disconnected";
-        if(connStatus == "Connected") {
-            if (pressureDefaultMinLimitRefreshPending) {
-                refreshPressureDefaultMinLimitFromFirebase();
-            }
-            ipAddress = WiFi.localIP().toString();
-            long rssi = WiFi.RSSI();
-            additionalInfo = "RSSI: " + String(rssi);
-            // Faz 2: İlk baglantida tek seferlik sync (loop blogu degil — sadece bir kez calisir)
-            //if (!alarmsynced) {
-            //    Serial.println("[FB] First-connect alarm sync start");
-            //    syncAlarmFromFirebase(0);
-            //    syncAlarmFromFirebase(1);
-            //    syncAlarmFromFirebase(2);
-            //    syncAlarmFromFirebase(3);
-            //    alarmsynced = true;
-            //    Serial.println("[FB] First-connect alarm sync done");
-            //}
-            display.showIPAddress(ipAddress.c_str(), connStatus.c_str(), additionalInfo.c_str(), now, pressureValue);
-        }
-    //display.showPressure(pressureValue); // Assuming display.showPressure() is a method to show pressure
+    if (WiFi.status() == WL_CONNECTED && pressureDefaultMinLimitRefreshPending) {
+        refreshPressureDefaultMinLimitFromFirebase();
     }
-
+    if (screenOn) {
+        showInfoPage(currentInfoPage, now, pressureValue);
+    }
     for (int i = 0; i < 8; i++) {
         alrm[i].Update(now);
     }
