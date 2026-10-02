@@ -12,7 +12,7 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <pushover.h>
-#include <Firebase.h>
+#include "firebase_rest.h"
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  10        /* Time ESP32 will go to sleep (in seconds) */
@@ -265,7 +265,7 @@ void pushoverQueueFlush(Pushover& pushoverInstance) {
 }
 
 // Her loop() cagrisinda en fazla bu kadar zaman harcanir.
-extern Firebase fb;
+extern FirebaseRest fb;
 
 void fbQueueFlush() {
     if (WiFi.status() != WL_CONNECTED) return;
@@ -325,7 +325,7 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 Display display(u8g2);
 
-Firebase fb(REFERENCE_URL);
+FirebaseRest fb(REFERENCE_URL);
 
 //Preferences pref;
 Alarm alrm[] = {Alarm(0), Alarm(1), Alarm(2), Alarm(3), Alarm(4), Alarm(5), Alarm(6), Alarm(7)};
@@ -752,23 +752,15 @@ bool syncAlarmFromFirebase(int alarmNo, bool* changedOut = nullptr) {
         return false;
     }
 
-    HTTPClient alarmHttp;
-    String alarmUrl = REFERENCE_URL + "Alarms/Alarm" + String(alarmNo) + ".json";
-    alarmHttp.setTimeout(6000); // Faz 1: timeout siniri
+    String payload;
     setDbActivity('R');
-    alarmHttp.begin(alarmUrl);
-    int httpCode = alarmHttp.GET();
+    int httpCode = fb.getRaw("Alarms/Alarm" + String(alarmNo), payload);
+    setDbActivity('\0');
 
     if (httpCode != HTTP_CODE_OK) {
-        setDbActivity('\0');
         Serial.println("syncAlarmFromFirebase: GET failed for alarm " + String(alarmNo) + ", HTTP code: " + String(httpCode));
-        alarmHttp.end();
         return false;
     }
-
-    String payload = alarmHttp.getString();
-    alarmHttp.end();
-    setDbActivity('\0');
 
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
