@@ -72,7 +72,6 @@
     <div id="logsContainer"></div>
     <script>
         const relayCount = 8;
-        const baseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/RelayLogs";
 
         function formatTimestamp(ts) {
             // Expecting ISO or "YYYY-MM-DD HH:MM:SS" or epoch ms
@@ -89,11 +88,11 @@
         }
 
         async function fetchRelayLog(relayNo) {
-            const url = `${baseUrl}/Relay${relayNo}/Log.json`;
             try {
-                const resp = await fetch(url);
+                const resp = await fetch(`/api/relay-logs?relayNo=${relayNo}`);
                 if (!resp.ok) throw new Error("Failed to fetch");
-                return await resp.json();
+                const data = await resp.json();
+                return data.log;
             } catch {
                 return null;
             }
@@ -159,13 +158,9 @@
 
         async function clearAllLogs() {
             if (!confirm("Are you sure you want to clear ALL relay logs?")) return;
-            const relayPromises = [];
-            for (let i = 0; i < relayCount; i++) {
-                const url = `${baseUrl}/Relay${i}/Log.json`;
-                relayPromises.push(fetch(url, { method: "DELETE" }));
-            }
             try {
-                await Promise.all(relayPromises);
+                const resp = await fetch("/api/relay-logs", { method: "DELETE" });
+                if (!resp.ok) throw new Error("Failed to clear");
                 loadAllRelayLogs();
             } catch (e) {
                 alert("Failed to clear logs.");

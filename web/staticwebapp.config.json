@@ -5,6 +5,14 @@
       "allowedRoles": ["kurudere_admin"]
     },
     {
+      "route": "/relays.html",
+      "allowedRoles": ["kurudere_admin"]
+    },
+    {
+      "route": "/firebase_relay_logs.html",
+      "allowedRoles": ["kurudere_admin"]
+    },
+    {
       "route": "/api/alarm",
       "methods": ["GET", "PUT"],
       "allowedRoles": ["kurudere_admin"]

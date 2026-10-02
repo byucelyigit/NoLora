@@ -119,7 +119,6 @@
     <div id="status" class="status">Hazır</div>
 
     <script>
-        const firebaseUrl = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app";
         const relayNames = new Array(8).fill("");
 
         function setStatus(message, isError = false) {
@@ -161,10 +160,10 @@
         }
 
         function writeCommand(commandValue, actionLabel) {
-            fetch(`${firebaseUrl}/Params/Command.json`, {
+            fetch("/api/command", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(commandValue)
+                body: JSON.stringify({ command: commandValue })
             })
                 .then(response => {
                     if (!response.ok) {
@@ -179,24 +178,21 @@
         }
 
         function fetchRelayNamesAndRender() {
-            const requests = [];
-            for (let i = 0; i < 8; i++) {
-                const req = fetch(`${firebaseUrl}/relays/relay${i}.json`)
-                    .then(response => response.ok ? response.json() : null)
-                    .then(name => {
-                        if (name && typeof name === "string" && name.trim() !== "") {
-                            relayNames[i] = name;
-                        } else {
-                            relayNames[i] = `Relay ${i + 1}`;
-                        }
-                    })
-                    .catch(() => {
+            fetch("/api/relays")
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const names = data && Array.isArray(data.names) ? data.names : [];
+                    for (let i = 0; i < 8; i++) {
+                        const name = names[i];
+                        relayNames[i] = typeof name === "string" && name.trim() !== "" ? name : `Relay ${i + 1}`;
+                    }
+                })
+                .catch(() => {
+                    for (let i = 0; i < 8; i++) {
                         relayNames[i] = `Relay ${i + 1}`;
-                    });
-                requests.push(req);
-            }
-
-            Promise.all(requests).then(() => renderRelayButtons());
+                    }
+                })
+                .then(() => renderRelayButtons());
         }
 
         fetchRelayNamesAndRender();
