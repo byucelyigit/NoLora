@@ -64,6 +64,7 @@ int pressureMin = 0;
 int pressureMax = 0;
 bool pressureStatsInitialized = false;
 int pressureDefaultMinLimitValue = 0;
+int pressureLostAction = 0;
 bool pressureDefaultMinLimitRefreshPending = true;
 int pressureLostState = -1; // -1: bilinmiyor, 0: normal, 1: kayip
 long lastPingUpdate = 0;
@@ -152,6 +153,12 @@ void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
                 u8g2.drawStr(0, 13, "Basinc");
                 u8g2.setFont(u8g2_font_helvB24_tr);
                 u8g2.drawStr(0, 48, value);
+                u8g2.setFont(u8g2_font_7x13B_mf);
+                u8g2.drawHLine(64, 32, 64);
+                snprintf(value, sizeof(value), "Min: %d", pressureMin);
+                u8g2.drawStr(68, 20, value);
+                snprintf(value, sizeof(value), "Max: %d", pressureMax);
+                u8g2.drawStr(68, 59, value);
                 break;
             default:
                 break;
@@ -441,10 +448,13 @@ bool refreshPressureDefaultMinLimitFromFirebase() {
 
     setDbActivity('R');
     int defaultMinLimitValue = fb.getInt("Pressure/DefaultMinLimit");
+    int pressureLostActionValue = fb.getInt("Pressure/PressureLostAction");
     setDbActivity('\0');
     pressureDefaultMinLimitValue = defaultMinLimitValue;
+    pressureLostAction = pressureLostActionValue;
     pressureDefaultMinLimitRefreshPending = false;
     Serial.println("[FB] Pressure/DefaultMinLimit refreshed: " + String(pressureDefaultMinLimitValue));
+    Serial.println("[FB] Pressure/PressureLostAction refreshed: " + String(pressureLostAction));
     return true;
 }
 
@@ -1076,10 +1086,14 @@ void updatePingTime() {
                 fbSetIntChecked("Pressure/PressureLost", pressureLostState, "pressure_lost");
 
                 if (pressureLostState == 1) {
-                    for (int i = 0; i < RELAY_COUNT; i++) {
-                        relay[i].TurnOff(8);
+                    if (pressureLostAction == 1) {
+                        for (int i = 0; i < RELAY_COUNT; i++) {
+                            relay[i].TurnOff(8);
+                        }
+                        pushoverQueueEnqueue("Basinc limiti altina dustu. Sulama durduruldu.");
+                    } else {
+                        pushoverQueueEnqueue("Basinc limiti altina dustu.");
                     }
-                    pushoverQueueEnqueue("Basinc limiti altina dustu. Sulama durduruldu.");
                 } else {
                     pushoverQueueEnqueue("Basinc tekrar normal seviyeye cikti.");
                 }
