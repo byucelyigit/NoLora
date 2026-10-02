@@ -1319,7 +1319,7 @@ void loop() {
         refreshPressureDefaultMinLimitFromFirebase();
     }
     if (screenOn) {
-        showInfoPage(currentInfoPage, now, pressureValue);
+        showInfoPage(currentInfoPage, now, pressureCurrent);
     }
     for (int i = 0; i < 8; i++) {
         alrm[i].Update(now);
