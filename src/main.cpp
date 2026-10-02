@@ -68,6 +68,7 @@ int pressureLostAction = 0;
 bool pressureDefaultMinLimitRefreshPending = true;
 int pressureLostState = -1; // -1: bilinmiyor, 0: normal, 1: kayip
 long lastPingUpdate = 0;
+bool alarmStartNotificationSent[ALARM_COUNT] = {false};
 
 bool alarmsynced = false;
 bool systemStartedMsgSent = false;
@@ -458,21 +459,6 @@ bool refreshPressureDefaultMinLimitFromFirebase() {
     return true;
 }
 
-// Faz 2: logAlarmToFirebase kuyruğa yazar (callback bloğu engellemez)
-void logAlarmToFirebase(int alarmNo, const String& message) {
-    String logPath = "AlarmLogs/Alarm" + String(alarmNo) + "/Log";
-    RtcDateTime dt = Rtc.GetDateTime();
-    char timestamp[20];
-    snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
-             dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second());
-    String logMessage = "[" + String(timestamp) + "] " + message;
-    // Kuyruga bırak — loop() icerisinde flush edilecek
-    char pathBuf[64];
-    logPath.toCharArray(pathBuf, sizeof(pathBuf));
-    fbQueueEnqueuePushString(pathBuf, logMessage);
-    Serial.println("[FB] Queued log: " + logMessage);
-}
-
 void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected type
 {
     Serial.print("Alarm ");
@@ -493,24 +479,27 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
             case Alarm::AlarmStatus::ALARM_STATUS_RUNNING:
                 statusString = "RUNNING";
                 relay[rln-1].TurnOn(1);
-                snprintf(time_format_buffer, sizeof(time_format_buffer), "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
-                pushoverQueueEnqueue("Bahçe Sulama Başladı. " + String(rln) + " numaralı vana açıldı. Sistem saati: " + String(time_format_buffer) + " Beklenen görev süresi: " + String(alrm[alarmNo].repeat_count * (alrm[alarmNo].run_minutes + alrm[alarmNo].idle_minutes)) + " dakika. Görev No: " + String(alarmNo));
-                logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STARTED" + "Relay No:" + String(rln));
+                if (!alarmStartNotificationSent[alarmNo]) {
+                    alarmStartNotificationSent[alarmNo] = true;
+                    snprintf(time_format_buffer, sizeof(time_format_buffer), "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
+                    pushoverQueueEnqueue("Bahçe Sulama Başladı. " + String(rln) + " numaralı vana açıldı. Sistem saati: " + String(time_format_buffer) + " Beklenen görev süresi: " + String(alrm[alarmNo].repeat_count * (alrm[alarmNo].run_minutes + alrm[alarmNo].idle_minutes)) + " dakika. Görev No: " + String(alarmNo));
+                }
                 FirebaseAlarmStatus(alarmNo, 1);
                 break;
             case Alarm::AlarmStatus::ALARM_STATUS_STOPPED:
                 relay[rln-1].TurnOff(2);
                 alrm[alarmNo].SaveLastDate(now.Day(), now.Month(), now.Year(), eprom); //normalde bunun alarm nesnesi içinde olması lazım. ama eprom nesnesinin her bir alarma gönderilmesi doğru mu bilemedim. şimdilik böyle kalsın.
                 FirebaseLastRunDate(alarmNo);
-                pushoverQueueEnqueue("Bahçe Sulandı. " + String(rln) + " numaralı vana kapandı.");
-                logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " STOPPED");
+                if (alarmStartNotificationSent[alarmNo]) {
+                    pushoverQueueEnqueue("Bahçe Sulandı. " + String(rln) + " numaralı vana kapandı.");
+                    alarmStartNotificationSent[alarmNo] = false;
+                }
                 FirebaseAlarmStatus(alarmNo, 0);
                 statusString = "STOPPED";
                 break;
             case Alarm::AlarmStatus::ALARM_STATUS_WAITING:
                 statusString = "WAITING";
                 relay[rln-1].TurnOff(3);
-                logAlarmToFirebase(alarmNo, "Alarm " + String(alarmNo) + " WAITING");
                 break;
             default:
                 statusString = "UNKNOWN";
@@ -1232,7 +1221,7 @@ void setup(){
 
 
     for (int i = 0; i < RELAY_COUNT; i++) {
-        relay[i].SetStateChangeCallback(onRelayStateChange);
+        // relay[i].SetStateChangeCallback(onRelayStateChange);
     }
 
   	u8g2.begin();
