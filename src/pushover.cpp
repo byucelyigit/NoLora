@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "pushover.h"
+#include "secrets.h"
 #include <HTTPClient.h>
 
 const char *PUSHOVER_ROOT_CA = "-----BEGIN CERTIFICATE-----\n"
@@ -48,8 +49,8 @@ const char *PUSHOVER_ROOT_CA = "-----BEGIN CERTIFICATE-----\n"
 
 
 const char* serverUrl = "https://api.pushover.net/1/messages.json"; // Pushover API URL
-const char* userKey = "uzirvs2c54j5aeojecat9rf4zpwrot"; // Pushover kullanıcı anahtarınız
-const char* appToken = "av15a3a64zcmjk9yrb1n8bff9auj2r"; // Pushover uygulama token'ınız
+const char* userKey = PUSHOVER_USER_KEY;
+const char* appToken = PUSHOVER_APP_TOKEN;
 
 
 void Pushover::sendNotification(String message) {

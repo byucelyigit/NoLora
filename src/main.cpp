@@ -13,6 +13,7 @@
 #include <ArduinoJson.h>
 #include <pushover.h>
 #include "firebase_rest.h"
+#include "secrets.h"
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  10        /* Time ESP32 will go to sleep (in seconds) */
@@ -27,8 +28,8 @@
 
 //pushover diye bir uygulmayı kullanarak iphone bildirim gönderme işlemi yapılabilir.
 //https://pushover.net/apps/9auj2r-gardener
-const char* ssid = "atolye";
-const char* password = "87973341";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
 //aşağıdaki veriye erişme sınırı rule tanımı var. Bunu kontrol etmeyi unutma
 const String REFERENCE_URL = "https://send-kurudere-messages-default-rtdb.europe-west1.firebasedatabase.app/";
