@@ -508,38 +508,9 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
     }
 }
 
-void onRelayStateChange(int relayNo, bool isOn, int reason) {
-    String state = isOn ? "ON" : "OFF";
-    Serial.println("Relay " + String(relayNo) + " turned " + state);
-
-    // Example: Log relay state change to Firebase
-    String logPath = "RelayLogs/Relay" + String(relayNo) + "/Log";
-    RtcDateTime dt = Rtc.GetDateTime();
-    char timestamp[20];
-    snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
-             dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second());
-    String logMessage = "[" + String(timestamp) + "] Relay " + String(relayNo) + " turned " + state + " (Reason: " + String(reason) + ")";
-    // Faz 2: relay logu kuyruğa bırak — bloklamaz
-    char logPathBuf[128];
-    logPath.toCharArray(logPathBuf, sizeof(logPathBuf));
-    fbQueueEnqueuePushString(logPathBuf, logMessage);
-    Serial.println("[FB] Queued relay log: " + logMessage);
-
-    // Faz 1+3: relays/status guncellemesi - gecersiz deger (<=0) korumasi ile
-    //if (WiFi.status() != WL_CONNECTED) {
-    //    Serial.println("[FB] relays/status skip (no WiFi)");
-    //    return;
-    //}
-    // Kutuphanenin getInt(path) tek arguman doner, 0 hem gecersiz hem de gecerli deger olabilir;
-    // WiFi kontrolunu yukarida yaptik, bu noktada bagliyiz demek.
-    //int relayStatusVal = fb.getInt("relays/status");
-    //if (relayStatusVal < 0) relayStatusVal = 0;
-    //if (isOn) {
-    //    relayStatusVal |= (1 << relayNo);
-    //} else {
-    //    relayStatusVal &= ~(1 << relayNo);
-    //}
-    //fbSetIntChecked("relays/status", relayStatusVal, "relay_status");
+void onRelayStateChange(int relayNo, bool isOn, int) {
+    String statusPath = "relays/state/relay" + String(relayNo);
+    fbSetIntChecked(statusPath, isOn ? 1 : 0, "relay_state");
 }
 
 void handleAlarmJson() {
@@ -1221,7 +1192,7 @@ void setup(){
 
 
     for (int i = 0; i < RELAY_COUNT; i++) {
-        // relay[i].SetStateChangeCallback(onRelayStateChange);
+        relay[i].SetStateChangeCallback(onRelayStateChange);
     }
 
   	u8g2.begin();
