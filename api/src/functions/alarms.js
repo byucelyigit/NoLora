@@ -1,52 +1,5 @@
 const { app } = require('@azure/functions');
-
-
-async function firebaseLogin() {
-
-    const response = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`,
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                email: process.env.FIREBASE_EMAIL,
-                password: process.env.FIREBASE_PASSWORD,
-                returnSecureToken: true
-            })
-        }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-        throw new Error('Firebase login failed');
-    }
-
-    return result.idToken;
-}
-
-
-async function firebaseRead(path, idToken) {
-
-    const dbUrl =
-        process.env.FIREBASE_DB_URL.replace(/\/+$/, '');
-
-    const response = await fetch(
-        `${dbUrl}/${path}.json?auth=${encodeURIComponent(idToken)}`
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-        throw new Error(
-            `Firebase read failed: ${path}`
-        );
-    }
-
-    return result;
-}
+const { firebaseRead } = require('../shared/firebase');
 
 
 app.http('alarms', {
@@ -58,13 +11,10 @@ app.http('alarms', {
 
         try {
 
-            const idToken =
-                await firebaseLogin();
-
             const [alarms, relays] =
                 await Promise.all([
-                    firebaseRead('Alarms', idToken),
-                    firebaseRead('relays', idToken)
+                    firebaseRead('Alarms'),
+                    firebaseRead('relays')
                 ]);
 
             return {

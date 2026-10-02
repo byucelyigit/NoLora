@@ -1,159 +1,9 @@
 const { app } = require('@azure/functions');
-
-
-/*
- * Static Web Apps kullanıcısını kontrol et.
- * Route zaten kurudere_admin ile korunuyor.
- * Burada defense-in-depth olarak tekrar kontrol ediyoruz.
- */
-function isKurudereAdmin(request) {
-
-    const encoded =
-        request.headers.get('x-ms-client-principal');
-
-    if (!encoded) {
-        return false;
-    }
-
-    try {
-
-        const principal =
-            JSON.parse(
-                Buffer.from(
-                    encoded,
-                    'base64'
-                ).toString('utf8')
-            );
-
-        return Array.isArray(principal.userRoles) &&
-            principal.userRoles.includes(
-                'kurudere_admin'
-            );
-
-    } catch {
-        return false;
-    }
-}
-
-
-/*
- * Firebase login
- */
-async function firebaseLogin() {
-
-    const response = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`,
-        {
-            method: 'POST',
-
-            headers: {
-                'Content-Type': 'application/json'
-            },
-
-            body: JSON.stringify({
-                email:
-                    process.env.FIREBASE_EMAIL,
-
-                password:
-                    process.env.FIREBASE_PASSWORD,
-
-                returnSecureToken: true
-            })
-        }
-    );
-
-    const result =
-        await response.json();
-
-    if (!response.ok) {
-
-        throw new Error(
-            `Firebase login failed: ${JSON.stringify(result)}`
-        );
-    }
-
-    return result.idToken;
-}
-
-
-/*
- * Firebase URL
- */
-function firebaseUrl(path, idToken) {
-
-    const dbUrl =
-        process.env.FIREBASE_DB_URL
-            .replace(/\/+$/, '');
-
-    return (
-        `${dbUrl}/${path}.json` +
-        `?auth=${encodeURIComponent(idToken)}`
-    );
-}
-
-
-/*
- * Firebase GET
- */
-async function firebaseRead(
-    path,
-    idToken
-) {
-
-    const response =
-        await fetch(
-            firebaseUrl(path, idToken)
-        );
-
-    const result =
-        await response.json();
-
-    if (!response.ok) {
-
-        throw new Error(
-            `Firebase read failed: ${JSON.stringify(result)}`
-        );
-    }
-
-    return result;
-}
-
-
-/*
- * Firebase PUT
- */
-async function firebaseWrite(
-    path,
-    value,
-    idToken
-) {
-
-    const response =
-        await fetch(
-            firebaseUrl(path, idToken),
-            {
-                method: 'PUT',
-
-                headers: {
-                    'Content-Type':
-                        'application/json'
-                },
-
-                body:
-                    JSON.stringify(value)
-            }
-        );
-
-    if (!response.ok) {
-
-        const text =
-            await response.text();
-
-        throw new Error(
-            `Firebase write failed: ${text}`
-        );
-    }
-}
+const {
+    firebaseRead,
+    firebaseWrite,
+    isKurudereAdmin
+} = require('../shared/firebase');
 
 
 /*
@@ -354,10 +204,6 @@ app.http('alarm', {
 
         try {
 
-            const idToken =
-                await firebaseLogin();
-
-
             /*
              * GET
              */
@@ -367,8 +213,7 @@ app.http('alarm', {
 
                 const alarm =
                     await firebaseRead(
-                        `Alarms/${alarmNo}`,
-                        idToken
+                        `Alarms/${alarmNo}`
                     );
 
 
@@ -415,8 +260,7 @@ app.http('alarm', {
 
             const currentAlarm =
                 await firebaseRead(
-                    `Alarms/${alarmNo}`,
-                    idToken
+                    `Alarms/${alarmNo}`
                 );
 
 
@@ -446,8 +290,7 @@ app.http('alarm', {
              */
             await firebaseWrite(
                 `Alarms/${alarmNo}`,
-                updatedAlarm,
-                idToken
+                updatedAlarm
             );
 
 
@@ -487,8 +330,7 @@ app.http('alarm', {
 
                     const currentCommand =
                         await firebaseRead(
-                            'Params/Command',
-                            idToken
+                            'Params/Command'
                         );
 
 
@@ -514,8 +356,7 @@ app.http('alarm', {
 
                 await firebaseWrite(
                     'Params/Command',
-                    commandValue,
-                    idToken
+                    commandValue
                 );
             }
 

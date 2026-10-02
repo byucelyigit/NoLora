@@ -1,5 +1,10 @@
 const { app } = require('@azure/functions');
 const crypto = require('crypto');
+const {
+    firebaseRead,
+    firebaseWrite,
+    firebaseDelete
+} = require('../shared/firebase');
 
 function secureCompare(a, b) {
     if (!a || !b) return false;
@@ -12,40 +17,6 @@ function secureCompare(a, b) {
     }
 
     return crypto.timingSafeEqual(aBuffer, bBuffer);
-}
-
-async function firebaseLogin() {
-    const response = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`,
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                email: process.env.FIREBASE_EMAIL,
-                password: process.env.FIREBASE_PASSWORD,
-                returnSecureToken: true
-            })
-        }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-        throw new Error(
-            `Firebase login failed: ${JSON.stringify(result)}`
-        );
-    }
-
-    return result;
-}
-
-function firebaseUrl(path, idToken) {
-    const dbUrl =
-        process.env.FIREBASE_DB_URL.replace(/\/+$/, '');
-
-    return `${dbUrl}/${path}.json?auth=${encodeURIComponent(idToken)}`;
 }
 
 app.http('firebase-write-test', {
@@ -81,8 +52,6 @@ app.http('firebase-write-test', {
         }
 
         try {
-            const auth = await firebaseLogin();
-
             const path = 'Params/_bridge_test';
 
             const testData = {
@@ -91,61 +60,16 @@ app.http('firebase-write-test', {
                 timestamp: new Date().toISOString()
             };
 
-            // WRITE
-            const writeResponse = await fetch(
-                firebaseUrl(path, auth.idToken),
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(testData)
-                }
-            );
+            await firebaseWrite(path, testData);
 
-            const writtenData = await writeResponse.json();
+            const readData = await firebaseRead(path);
 
-            if (!writeResponse.ok) {
-                throw new Error(
-                    `Firebase write failed: ${JSON.stringify(writtenData)}`
-                );
-            }
-
-            // READ BACK
-            const readResponse = await fetch(
-                firebaseUrl(path, auth.idToken)
-            );
-
-            const readData = await readResponse.json();
-
-            if (!readResponse.ok) {
-                throw new Error(
-                    `Firebase read-back failed: ${JSON.stringify(readData)}`
-                );
-            }
-
-            // CLEAN UP
-            const deleteResponse = await fetch(
-                firebaseUrl(path, auth.idToken),
-                {
-                    method: 'DELETE'
-                }
-            );
-
-            if (!deleteResponse.ok) {
-                const deleteError =
-                    await deleteResponse.text();
-
-                throw new Error(
-                    `Firebase cleanup failed: ${deleteError}`
-                );
-            }
+            await firebaseDelete(path);
 
             return {
                 status: 200,
                 jsonBody: {
                     ok: true,
-                    uid: auth.localId,
                     writeSuccessful: true,
                     readBack: readData,
                     cleanupSuccessful: true

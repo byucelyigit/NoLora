@@ -8,6 +8,21 @@
       "route": "/api/alarm",
       "methods": ["GET", "PUT"],
       "allowedRoles": ["kurudere_admin"]
+    },
+    {
+      "route": "/api/relays",
+      "methods": ["GET"],
+      "allowedRoles": ["kurudere_admin"]
+    },
+    {
+      "route": "/api/relay-logs",
+      "methods": ["GET", "DELETE"],
+      "allowedRoles": ["kurudere_admin"]
+    },
+    {
+      "route": "/api/command",
+      "methods": ["PUT"],
+      "allowedRoles": ["kurudere_admin"]
     }
   ],
   "responseOverrides": {

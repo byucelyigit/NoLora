@@ -84,9 +84,11 @@ InfoPage currentInfoPage = INFO_TIME;
 unsigned long lastButtonPress = 0;
 unsigned long buttonStateChangedAt = 0;
 bool screenOn = true;
+char dbActivity = '\0';
 
 extern U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2;
 extern Relay relay[];
+extern RtcDS1302<ThreeWire> Rtc;
 
 void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
     char value[32];
@@ -153,7 +155,20 @@ void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
             default:
                 break;
         }
+
+        if (dbActivity != '\0') {
+            char activity[2] = { dbActivity, '\0' };
+            u8g2.setFont(u8g2_font_7x13B_mf);
+            u8g2.drawStr(120, 12, activity);
+        }
     } while (u8g2.nextPage());
+}
+
+void setDbActivity(char activity) {
+    dbActivity = activity;
+    if (screenOn) {
+        showInfoPage(currentInfoPage, Rtc.GetDateTime(), pressureCurrent);
+    }
 }
 
 
@@ -270,6 +285,7 @@ void fbQueueFlush() {
         }
 
         int rc = -1;
+        setDbActivity('W');
         if (item.kind == FB_WRITE_SET_INT) {
             rc = fb.setInt(String(item.path), String(item.value).toInt());
         } else if (item.kind == FB_WRITE_SET_STRING) {
@@ -277,6 +293,7 @@ void fbQueueFlush() {
         } else {
             rc = fb.pushString(String(item.path), String(item.value));
         }
+        setDbActivity('\0');
 
         if (rc == 200) {
             //fbSuccessCount++;
@@ -421,7 +438,9 @@ bool refreshPressureDefaultMinLimitFromFirebase() {
         return false;
     }
 
+    setDbActivity('R');
     int defaultMinLimitValue = fb.getInt("Pressure/DefaultMinLimit");
+    setDbActivity('\0');
     pressureDefaultMinLimitValue = defaultMinLimitValue;
     pressureDefaultMinLimitRefreshPending = false;
     Serial.println("[FB] Pressure/DefaultMinLimit refreshed: " + String(pressureDefaultMinLimitValue));
@@ -690,7 +709,9 @@ void writeAlarmsToFirebase() {
         String alarmPath = "Alarms/Alarm" + String(i);
         String alarmJson = alrm[i].toJson();
         Serial.println("Alarm " + alarmJson);        
+        setDbActivity('W');
         fb.setJson(alarmPath, alarmJson);
+        setDbActivity('\0');
         Serial.println("Alarm " + String(i) + " written to Firebase.");
     }
 }
@@ -734,10 +755,12 @@ bool syncAlarmFromFirebase(int alarmNo, bool* changedOut = nullptr) {
     HTTPClient alarmHttp;
     String alarmUrl = REFERENCE_URL + "Alarms/Alarm" + String(alarmNo) + ".json";
     alarmHttp.setTimeout(6000); // Faz 1: timeout siniri
+    setDbActivity('R');
     alarmHttp.begin(alarmUrl);
     int httpCode = alarmHttp.GET();
 
     if (httpCode != HTTP_CODE_OK) {
+        setDbActivity('\0');
         Serial.println("syncAlarmFromFirebase: GET failed for alarm " + String(alarmNo) + ", HTTP code: " + String(httpCode));
         alarmHttp.end();
         return false;
@@ -745,6 +768,7 @@ bool syncAlarmFromFirebase(int alarmNo, bool* changedOut = nullptr) {
 
     String payload = alarmHttp.getString();
     alarmHttp.end();
+    setDbActivity('\0');
 
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
@@ -913,7 +937,9 @@ void ExecuteCommandFromFirebase()
         return;
     }
 
+    setDbActivity('R');
     int command = fb.getInt("Params/Command");
+    setDbActivity('\0');
     if (command == -1) {
         return; // No command or error
     }
@@ -921,7 +947,9 @@ void ExecuteCommandFromFirebase()
     //command -2 ise o zaman sistem reset işlemini çalıştır
     if (command == -2) {
         pushover.sendNotification("Resetleme...");  
+        setDbActivity('W');
         fb.setInt("Params/Command", -1);  // reset olmadan önce -1 yapması lazım yoksa sürekli reset atar.
+        setDbActivity('\0');
         fbSetIntChecked("Params/Command", -1, "Command_reset");        
         systemReset();
         return;
@@ -1271,7 +1299,7 @@ void loop() {
             }
         }
 
-        // If the average pressure is below 130, stop all relaysv
+        // If the average pressure is below x, stop all relaysv
         if(CHECK_PRESSURE_LIMIT)
         {
             if (averagePressure < pressureLimit) {
