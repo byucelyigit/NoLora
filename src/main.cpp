@@ -110,13 +110,13 @@ void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
         switch (page) {
             case INFO_TIME:
                 snprintf(value, sizeof(value), "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
-                u8g2.drawStr(0, 13, "Saat");
+                u8g2.drawStr(0, 13, "Clock");
                 u8g2.setFont(u8g2_font_helvB24_tr);
                 u8g2.drawStr(0, 48, value);
                 break;
             case INFO_DATE:
                 snprintf(value, sizeof(value), "%02u/%02u/%04u", now.Day(), now.Month(), now.Year());
-                u8g2.drawStr(0, 13, "Tarih");
+                u8g2.drawStr(0, 13, "Date");
                 u8g2.setFont(u8g2_font_helvB18_tr);
                 u8g2.drawStr(0, 43, value);
                 break;
@@ -132,7 +132,7 @@ void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
                 u8g2.drawStr(0, 35, WiFi.status() == WL_CONNECTED ? ipAddress.c_str() : "Baglanti yok");
                 break;
             case INFO_RELAYS:
-                u8g2.drawStr(0, 13, "Acik roleler");
+                u8g2.drawStr(0, 13, "Relays");
                 u8g2.setFont(u8g2_font_helvB24_tr);
                 if (activeRelayCount == 0) {
                     u8g2.drawStr(0, 48, "Yok");
@@ -150,7 +150,7 @@ void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
                 break;
             case INFO_PRESSURE:
                 snprintf(value, sizeof(value), "%d", pressure);
-                u8g2.drawStr(0, 13, "Basinc");
+                u8g2.drawStr(0, 13, "Pressure");
                 u8g2.setFont(u8g2_font_helvB24_tr);
                 u8g2.drawStr(0, 48, value);
                 u8g2.setFont(u8g2_font_7x13B_mf);
