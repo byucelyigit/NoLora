@@ -5,7 +5,9 @@ const { firebaseWrite, isKurudereAdmin } = require('../shared/firebase');
 function isValidCommand(value) {
     return (
         Number.isInteger(value) &&
-        ((value >= 11 && value <= 18) || (value >= 21 && value <= 28))
+        ((value >= 11 && value <= 18) ||
+            (value >= 21 && value <= 28) ||
+            [-4, -5, -6].includes(value))
     );
 }
 

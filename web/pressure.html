@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basınç Kontrolü</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #1e293b;
+            background: #f1f5f9;
+        }
+        body {
+            margin: 0;
+            padding: 24px;
+        }
+        .panel {
+            max-width: 760px;
+            margin: 0 auto;
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid #dbe5ee;
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+        }
+        header {
+            padding: 20px 24px;
+            background: #f8fbff;
+            border-bottom: 1px solid #e5edf5;
+        }
+        h1 {
+            margin: 0;
+            font-size: 26px;
+        }
+        .sub {
+            margin: 6px 0 0;
+            color: #64748b;
+        }
+        .content {
+            display: grid;
+            gap: 20px;
+            padding: 24px;
+        }
+        .readings {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .reading {
+            padding: 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+        .reading-label {
+            display: block;
+            margin-bottom: 6px;
+            color: #64748b;
+            font-size: 14px;
+        }
+        .reading-value {
+            font-size: 22px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+        .reading-value.lost {
+            color: #b91c1c;
+        }
+        .reading-value.ok {
+            color: #15803d;
+        }
+        .actions {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+        button {
+            min-height: 44px;
+            padding: 10px 14px;
+            border: 0;
+            border-radius: 9px;
+            background: #2563eb;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+        button:disabled {
+            cursor: wait;
+            opacity: 0.6;
+        }
+        .danger {
+            background: #dc2626;
+        }
+        .danger:hover:not(:disabled) {
+            background: #b91c1c;
+        }
+        .limit-form {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: end;
+        }
+        label {
+            display: grid;
+            gap: 7px;
+            font-weight: 600;
+        }
+        input {
+            box-sizing: border-box;
+            width: 100%;
+            min-height: 44px;
+            padding: 9px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 9px;
+            font: inherit;
+        }
+        .hint {
+            margin: 0;
+            color: #64748b;
+            font-size: 13px;
+        }
+        .status {
+            min-height: 20px;
+            margin: 0;
+            color: #334155;
+        }
+        .status.error {
+            color: #b91c1c;
+        }
+        .status.success {
+            color: #166534;
+        }
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 24px 22px;
+        }
+        .secondary {
+            background: #475569;
+        }
+        .secondary:hover:not(:disabled) {
+            background: #334155;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 12px;
+            }
+            .content {
+                padding: 16px;
+            }
+            .readings {
+                grid-template-columns: 1fr 1fr;
+            }
+            .actions {
+                grid-template-columns: 1fr;
+            }
+            .limit-form {
+                grid-template-columns: 1fr;
+            }
+            .limit-form button {
+                width: 100%;
+            }
+            .footer {
+                padding: 0 16px 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="panel">
+        <header>
+            <h1>Basınç Kontrolü</h1>
+            <p class="sub">Basınç değerlerini görüntüleyin ve cihaz komutlarını gönderin.</p>
+        </header>
+        <section class="content" aria-label="Basınç verileri ve komutlar">
+            <div class="readings" aria-live="polite">
+                <div class="reading">
+                    <span class="reading-label">Pressure</span>
+                    <span class="reading-value" id="pressureCurrent">—</span>
+                </div>
+                <div class="reading">
+                    <span class="reading-label">Minimum Limit</span>
+                    <span class="reading-value" id="defaultMinLimit">—</span>
+                </div>
+                <div class="reading">
+                    <span class="reading-label">Min</span>
+                    <span class="reading-value" id="pressureMin">—</span>
+                </div>
+                <div class="reading">
+                    <span class="reading-label">Max</span>
+                    <span class="reading-value" id="pressureMax">—</span>
+                </div>
+                <div class="reading">
+                    <span class="reading-label">Pressure Status</span>
+                    <span class="reading-value" id="pressureStatus">—</span>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="button" data-command="-5">Read Pressure Values</button>
+                <button type="button" data-command="-4">Write Pressure Values</button>
+                <button type="button" class="danger" data-command="-6">Reset Pressure min max</button>
+            </div>
+
+            <form id="limitForm" class="limit-form">
+                <label for="newMinLimit">
+                    Minimum Limit değeri
+                    <input id="newMinLimit" name="defaultMinLimit" type="number" step="1" min="0" required>
+                </label>
+                <button type="submit">Set Pressure</button>
+            </form>
+            <p class="hint">Limit değerini kaydettikten sonra cihazda uygulamak için “Write Pressure Values” komutunu gönderin.</p>
+            <p id="status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <footer class="footer">
+            <button type="button" class="secondary" id="refreshButton">Yenile</button>
+            <button type="button" class="secondary" onclick="location.href='index.html'">Ana sayfa</button>
+        </footer>
+    </main>
+
+    <script>
+        const statusElement = document.getElementById("status");
+        const commandButtons = [...document.querySelectorAll("[data-command]")];
+        const refreshButton = document.getElementById("refreshButton");
+        const form = document.getElementById("limitForm");
+
+        function setStatus(message, kind = "") {
+            statusElement.textContent = message;
+            statusElement.className = `status ${kind}`;
+        }
+
+        function displayValue(value) {
+            return value === null || value === undefined ? "—" : String(value);
+        }
+
+        async function responseJson(response) {
+            const data = await response.json();
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || `HTTP ${response.status}`);
+            }
+            return data;
+        }
+
+        async function loadPressure() {
+            refreshButton.disabled = true;
+            try {
+                const response = await fetch("/api/pressure", { cache: "no-store" });
+                const data = await responseJson(response);
+
+                document.getElementById("pressureCurrent").textContent = displayValue(data.current);
+                document.getElementById("defaultMinLimit").textContent = displayValue(data.defaultMinLimit);
+                document.getElementById("pressureMin").textContent = displayValue(data.min);
+                document.getElementById("pressureMax").textContent = displayValue(data.max);
+
+                const pressureStatus = document.getElementById("pressureStatus");
+                if (data.pressureLost === 1 || data.pressureLost === "1") {
+                    pressureStatus.textContent = "Lost";
+                    pressureStatus.className = "reading-value lost";
+                } else if (data.pressureLost === 0 || data.pressureLost === "0") {
+                    pressureStatus.textContent = "OK";
+                    pressureStatus.className = "reading-value ok";
+                } else {
+                    pressureStatus.textContent = "—";
+                    pressureStatus.className = "reading-value";
+                }
+                setStatus(`Son güncelleme: ${new Date().toLocaleTimeString()}`);
+            } catch (error) {
+                console.error("Basınç verileri okunamadı:", error);
+                setStatus(`Basınç verileri okunamadı: ${error.message}`, "error");
+            } finally {
+                refreshButton.disabled = false;
+            }
+        }
+
+        async function sendCommand(command) {
+            commandButtons.forEach(button => button.disabled = true);
+            try {
+                const response = await fetch("/api/command", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ command })
+                });
+                await responseJson(response);
+                setStatus(`Komut gönderildi: Params/Command = ${command}.`, "success");
+            } catch (error) {
+                console.error("Basınç komutu gönderilemedi:", error);
+                setStatus(`Komut gönderilemedi: ${error.message}`, "error");
+            } finally {
+                commandButtons.forEach(button => button.disabled = false);
+            }
+        }
+
+        commandButtons.forEach(button => {
+            button.addEventListener("click", () => sendCommand(Number(button.dataset.command)));
+        });
+
+        form.addEventListener("submit", async event => {
+            event.preventDefault();
+            const input = document.getElementById("newMinLimit");
+            const value = input.valueAsNumber;
+            if (!Number.isSafeInteger(value) || value < 0) {
+                setStatus("Minimum limit sıfır veya daha büyük bir tamsayı olmalıdır.", "error");
+                return;
+            }
+
+            const submitButton = form.querySelector("button[type=submit]");
+            submitButton.disabled = true;
+            try {
+                const response = await fetch("/api/pressure", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ defaultMinLimit: value })
+                });
+                const data = await responseJson(response);
+                document.getElementById("defaultMinLimit").textContent = String(data.defaultMinLimit);
+                input.value = "";
+                setStatus(`Minimum limit kaydedildi: ${data.defaultMinLimit}. Cihaza göndermek için “Write Pressure Values” komutunu kullanın.`, "success");
+            } catch (error) {
+                console.error("Minimum limit kaydedilemedi:", error);
+                setStatus(`Minimum limit kaydedilemedi: ${error.message}`, "error");
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+
+        refreshButton.addEventListener("click", loadPressure);
+        loadPressure();
+        setInterval(loadPressure, 10000);
+    </script>
+</body>
+</html>

@@ -9,6 +9,10 @@
       "allowedRoles": ["kurudere_admin"]
     },
     {
+      "route": "/pressure.html",
+      "allowedRoles": ["kurudere_admin"]
+    },
+    {
       "route": "/firebase_relay_logs.html",
       "allowedRoles": ["kurudere_admin"]
     },
@@ -30,6 +34,11 @@
     {
       "route": "/api/command",
       "methods": ["PUT"],
+      "allowedRoles": ["kurudere_admin"]
+    },
+    {
+      "route": "/api/pressure",
+      "methods": ["GET", "PUT"],
       "allowedRoles": ["kurudere_admin"]
     }
   ],
