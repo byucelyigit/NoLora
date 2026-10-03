@@ -59,6 +59,8 @@ int pressureLimit = 10;
 int pressureMeasureTime = 1000; // 1 second
 int pressureMeasureCount = 3;
 int averagePressure;
+int averagePressureVoltageMilliVolts = 0;
+int measuredPressureVoltageMilliVolts = 0;
 int pressureCurrent = 0;
 int pressureMin = 0;
 int pressureMax = 0;
@@ -149,18 +151,21 @@ void showInfoPage(InfoPage page, const RtcDateTime& now, int pressure) {
                     }
                 }
                 break;
-            case INFO_PRESSURE:
-                snprintf(value, sizeof(value), "%d", pressure);
+            case INFO_PRESSURE: {
+                int voltageCentivolts = (averagePressureVoltageMilliVolts + 5) / 10;
+                snprintf(value, sizeof(value), "%d.%02d V", voltageCentivolts / 100, voltageCentivolts % 100);
                 u8g2.drawStr(0, 13, "Pressure");
-                u8g2.setFont(u8g2_font_helvB24_tr);
-                u8g2.drawStr(0, 48, value);
+                u8g2.setFont(u8g2_font_helvB18_tr);
+                u8g2.drawStr(0, 43, value);
                 u8g2.setFont(u8g2_font_7x13B_mf);
-                u8g2.drawHLine(64, 32, 64);
-                snprintf(value, sizeof(value), "Min: %d", pressureMin);
-                u8g2.drawStr(68, 20, value);
-                snprintf(value, sizeof(value), "Max: %d", pressureMax);
-                u8g2.drawStr(68, 59, value);
+                snprintf(value, sizeof(value), "P:%d", pressure);
+                u8g2.drawStr(80, 30, value);
+                snprintf(value, sizeof(value), "Min:%d", pressureMin);
+                u8g2.drawStr(76, 45, value);
+                snprintf(value, sizeof(value), "Max:%d", pressureMax);
+                u8g2.drawStr(76, 60, value);
                 break;
+            }
             default:
                 break;
         }
@@ -350,15 +355,8 @@ void printMessage(String payload, int x, int y) {
 }
 
 int measurePressure() {
-  	int voltage = analogRead(PRESSURE_ANALOG);
-  	float vin = (voltage * 3.3) / 1024.0;
-  	int pressure = vin*100;
-    //int pressure = 111;
-	return pressure;
-	//Serial.print(vin);
-	//String myString = String(vin);
-	//printMessage(myString, 0, 38);
-	//delay(100); 
+    measuredPressureVoltageMilliVolts = analogReadMilliVolts(PRESSURE_ANALOG);
+    return (measuredPressureVoltageMilliVolts + 5) / 10;
 }
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
@@ -1173,6 +1171,8 @@ void setup(){
 
    	pinMode (BUTTON1_ENTER, INPUT_PULLUP);
    	pinMode (PRESSURE_ANALOG,INPUT);
+    analogReadResolution(12);
+    analogSetPinAttenuation(PRESSURE_ANALOG, ADC_11db);
 	pinMode(RELAY1, OUTPUT);	
     pinMode(RELAY2, OUTPUT);	
     pinMode(RELAY3, OUTPUT);	
@@ -1216,6 +1216,7 @@ void loop() {
 
     static unsigned long lastPressureCheck = 0;
     static int pressureReadings[3] = {0, 0, 0};
+    static int pressureVoltageReadingsMilliVolts[3] = {0, 0, 0};
     static int pressureIndex = 0;
     int pressureValue = measurePressure(); // Measure pressure value
 
@@ -1247,10 +1248,12 @@ void loop() {
     if (currentMillis - lastPressureCheck >= pressureMeasureTime) {
         lastPressureCheck = currentMillis;
         pressureReadings[pressureIndex] = pressureValue;
+        pressureVoltageReadingsMilliVolts[pressureIndex] = measuredPressureVoltageMilliVolts;
         pressureIndex = (pressureIndex + 1) % pressureMeasureCount;
 
         // Calculate the average pressure
         averagePressure = (pressureReadings[0] + pressureReadings[1] + pressureReadings[2]) / 3;
+        averagePressureVoltageMilliVolts = (pressureVoltageReadingsMilliVolts[0] + pressureVoltageReadingsMilliVolts[1] + pressureVoltageReadingsMilliVolts[2]) / 3;
         pressureCurrent = averagePressure;
 
         if (!pressureStatsInitialized) {
