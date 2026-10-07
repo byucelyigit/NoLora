@@ -21,7 +21,7 @@ app.http('relays', {
 
             const states = await Promise.all(
                 Array.from({ length: RELAY_COUNT }, (_, i) =>
-                    firebaseRead(`relays/state/relay${i + 1}`)
+                    firebaseRead(`relays/state/relay${i}`)
                 )
             );
 
