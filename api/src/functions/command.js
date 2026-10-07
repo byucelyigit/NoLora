@@ -7,7 +7,7 @@ function isValidCommand(value) {
         Number.isInteger(value) &&
         ((value >= 11 && value <= 18) ||
             (value >= 21 && value <= 28) ||
-            [-4, -5, -6].includes(value))
+            [-2, -3, -4, -5, -6].includes(value))
     );
 }
 

@@ -36,5 +36,28 @@
     <button onclick="location.href='firebase_relay_logs.html'">Relay Logs</button>
     <button onclick="location.href='firebase_ping.html'">Ping</button>
     <button onclick="location.href='pressure.html'">Basınç</button>
+    <br>
+    <button onclick="sendCommand(-3, 'Saat internetten güncelleniyor')">Saati İnternetten Güncelle</button>
+    <button onclick="if (confirm('Cihaz resetlensin mi?')) sendCommand(-2, 'Reset komutu')">Reset</button>
+    <div id="status"></div>
+    <script>
+        function sendCommand(command, label) {
+            const status = document.getElementById("status");
+            fetch("/api/command", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ command })
+            })
+                .then(r => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    status.style.color = "#166534";
+                    status.textContent = `${label}: gönderildi (Params/Command=${command})`;
+                })
+                .catch(() => {
+                    status.style.color = "#b91c1c";
+                    status.textContent = `${label}: gönderilemedi`;
+                });
+        }
+    </script>
 </body>
 </html>

@@ -56,6 +56,30 @@
             font-size: 15px;
             color: #0f172a;
         }
+        .name-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .state-badge {
+            padding: 2px 8px;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: #f1f5f9;
+            color: #64748b;
+        }
+        .state-badge.on {
+            background: #dcfce7;
+            border-color: #16a34a;
+            color: #166534;
+        }
+        .state-badge.off {
+            background: #fee2e2;
+            border-color: #dc2626;
+            color: #991b1b;
+        }
         button {
             min-width: 130px;
             padding: 10px 14px;
@@ -98,7 +122,7 @@
             .relay-row {
                 grid-template-columns: 1fr 1fr;
             }
-            .relay-name {
+            .name-wrap {
                 grid-column: 1 / -1;
             }
             button {
@@ -138,9 +162,20 @@
                 const row = document.createElement("div");
                 row.className = "relay-row";
 
+                const nameWrap = document.createElement("div");
+                nameWrap.className = "name-wrap";
+
                 const name = document.createElement("div");
                 name.className = "relay-name";
                 name.textContent = relayLabel;
+
+                const badge = document.createElement("span");
+                badge.className = "state-badge";
+                badge.id = `relay-state-${relayNo}`;
+                badge.textContent = "-";
+
+                nameWrap.appendChild(name);
+                nameWrap.appendChild(badge);
 
                 const onBtn = document.createElement("button");
                 onBtn.className = "btn-on";
@@ -152,7 +187,7 @@
                 offBtn.textContent = "OFF";
                 offBtn.addEventListener("click", () => writeCommand(relayNo + 20, `${relayLabel} OFF`));
 
-                row.appendChild(name);
+                row.appendChild(nameWrap);
                 row.appendChild(onBtn);
                 row.appendChild(offBtn);
                 grid.appendChild(row);
@@ -195,7 +230,32 @@
                 .then(() => renderRelayButtons());
         }
 
+        function applyStates(states) {
+            for (let i = 0; i < 8; i++) {
+                const badge = document.getElementById(`relay-state-${i + 1}`);
+                if (!badge) continue;
+                const v = states[i];
+                const isOn = v === 1 || v === true || v === "1";
+                const isOff = v === 0 || v === false || v === "0";
+                badge.textContent = isOn ? "ON" : isOff ? "OFF" : "-";
+                badge.className = "state-badge" + (isOn ? " on" : isOff ? " off" : "");
+            }
+        }
+
+        function refreshStates() {
+            fetch("/api/relays", { cache: "no-store" })
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    if (data && Array.isArray(data.states)) {
+                        applyStates(data.states);
+                    }
+                })
+                .catch(error => console.error("Failed to read relay states:", error));
+        }
+
         fetchRelayNamesAndRender();
+        setTimeout(refreshStates, 500);
+        setInterval(refreshStates, 5000);
     </script>
 </body>
 </html>

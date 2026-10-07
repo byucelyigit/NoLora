@@ -19,10 +19,16 @@ app.http('relays', {
                 )
             );
 
+            const states = await Promise.all(
+                Array.from({ length: RELAY_COUNT }, (_, i) =>
+                    firebaseRead(`relays/state/relay${i + 1}`)
+                )
+            );
+
             return {
                 status: 200,
                 headers: { 'Cache-Control': 'no-store' },
-                jsonBody: { ok: true, names }
+                jsonBody: { ok: true, names, states }
             };
         } catch (err) {
             context.error(err);
