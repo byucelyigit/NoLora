@@ -22,6 +22,10 @@
 #define ALARM_COUNT 8
 #define CHECK_PRESSURE_LIMIT false
 
+#ifndef FW_VERSION
+#define FW_VERSION "1.0"
+#endif
+
 
 
 //RTC_DATA_ATTR int bootCount = 0;
@@ -1030,6 +1034,11 @@ void updatePingTime() {
             now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second());
         fbSetStringChecked("Params/pingtime", String(timeStr), "pingtime");
         fbSetStringChecked("Params/ip", WiFi.localIP().toString(), "ip");
+
+        static bool fwVersionReported = false;
+        if (!fwVersionReported) {
+            fwVersionReported = fbSetStringChecked("Params/FW_VERSION", FW_VERSION, "fw_version");
+        }
 
         if (pressureDefaultMinLimitValue > 0) {
             bool isPressureLost = (averagePressure < pressureDefaultMinLimitValue);
