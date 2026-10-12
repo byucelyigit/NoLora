@@ -13,6 +13,7 @@
 #include <ArduinoJson.h>
 #include <pushover.h>
 #include "firebase_rest.h"
+#include "ota_update.h"
 #include "secrets.h"
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
@@ -950,6 +951,33 @@ void ExecuteCommandFromFirebase()
         fbSetIntChecked("Pressure/Min", pressureMin, "pressure_min_reset");
         fbSetIntChecked("Pressure/Max", pressureMax, "pressure_max_reset");
         pushover.sendNotification("Pressure min/max values reset.");
+    }
+
+    // OTA firmware guncelleme
+    if (command == -7) {
+        // Komut basarisiz olsa da, basarili olup yeniden baslasa da tekrar tetiklenmemesi icin once temizlenir.
+        setDbActivity('W');
+        fb.setInt("Params/Command", -1);
+        setDbActivity('\0');
+
+        bool relayActive = false;
+        for (int i = 0; i < RELAY_COUNT; i++) {
+            if (relay[i].status == Relay::RELAY_ON) relayActive = true;
+        }
+
+        if (relayActive) {
+            pushover.sendNotification("OTA iptal: sulama aktif, role kapaliyken tekrar deneyin.");
+        } else {
+            pushover.sendNotification("OTA guncelleme kontrolu basladi. Mevcut surum: " FW_VERSION);
+            String otaMessage;
+            bool updated = otaCheckAndUpdate(FW_VERSION, otaMessage);
+            pushover.sendNotification(otaMessage);
+            if (updated) {
+                delay(1000);
+                ESP.restart();
+            }
+        }
+        return;
     }
 
     // command >-1 ise bu alarm numarasıdır. bu numarayı al ve UpdateAlarmParametersFromFireBase fonksiyonuna gönder. Bu fonksiyon alarm parametrelerini Firebase'den alır ve uygular.
