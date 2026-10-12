@@ -1,6 +1,18 @@
 {
   "routes": [
     {
+      "route": "/firmware/version.json",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate"
+      }
+    },
+    {
+      "route": "/firmware/*.bin",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
       "route": "/firebase_edit_alarm.html",
       "allowedRoles": ["kurudere_admin"]
     },
@@ -42,6 +54,9 @@
       "allowedRoles": ["kurudere_admin"]
     }
   ],
+  "mimeTypes": {
+    ".bin": "application/octet-stream"
+  },
   "responseOverrides": {
     "401": {
       "statusCode": 302,
