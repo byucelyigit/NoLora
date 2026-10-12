@@ -38,6 +38,7 @@
     <button onclick="location.href='pressure.html'">Basınç</button>
     <br>
     <button onclick="sendCommand(-3, 'Saat internetten güncelleniyor')">Saati İnternetten Güncelle</button>
+    <button onclick="if (confirm('Firmware güncellensin mi? Röleler kapalı olmalı.')) sendCommand(-7, 'Firmware güncelleme')">Firmware Güncelle</button>
     <button onclick="if (confirm('Cihaz resetlensin mi?')) sendCommand(-2, 'Reset komutu')">Reset</button>
     <div id="status"></div>
     <script>

@@ -29,6 +29,11 @@
 
 
 
+// Yeni sürüm yayınlama: powershell -
+// ExecutionPolicy Bypass -File scripts\publish_firmware.ps1 -Version 1.2, 
+// ardından web/firmware klasörünü commit/push edin. 
+// Azure dağıtımı bitince röleler kapalıyken Params/Command = -7 yazın.
+
 //RTC_DATA_ATTR int bootCount = 0;
 
 //pushover diye bir uygulmayı kullanarak iphone bildirim gönderme işlemi yapılabilir.
