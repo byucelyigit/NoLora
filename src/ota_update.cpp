@@ -6,6 +6,11 @@
 #include <Update.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <Preferences.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
+
+#define OTA_MAX_BOOT_TRIES 3
 #include <mbedtls/sha256.h>
 
 #define OTA_BASE_URL "https://thankful-meadow-0dd652c03.6.azurestaticapps.net/firmware/"
@@ -187,6 +192,64 @@ bool otaCheckAndUpdate(const char* currentVersion, String& outMessage) {
         return false;
     }
 
+    {
+        Preferences prefs;
+        prefs.begin("ota", false);
+        prefs.putUChar("pending", 1);
+        prefs.putUChar("tries", 0);
+        prefs.end();
+    }
+
     outMessage = "OTA: " + String(currentVersion) + " -> " + version + " yuklendi, yeniden basliyor.";
     return true;
+}
+
+// Yeni firmware onaylanana kadar her acilista sayac artar; 3 denemede onaylanmazsa
+// onceki OTA alanina geri doner.
+bool otaBootCheck() {
+    Preferences prefs;
+    prefs.begin("ota", false);
+    if (!prefs.getUChar("pending", 0)) {
+        prefs.end();
+        return false;
+    }
+    uint8_t tries = prefs.getUChar("tries", 0) + 1;
+    if (tries <= OTA_MAX_BOOT_TRIES) {
+        prefs.putUChar("tries", tries);
+        prefs.end();
+        return false;
+    }
+    prefs.putUChar("pending", 0);
+    prefs.putUChar("tries", 0);
+    prefs.putUChar("rolledback", 1);
+    prefs.end();
+
+    const esp_partition_t* other = esp_ota_get_next_update_partition(NULL);
+    if (other) {
+        uint8_t magic = 0;
+        if (esp_partition_read(other, 0, &magic, 1) == ESP_OK && magic == 0xE9 &&
+            esp_ota_set_boot_partition(other) == ESP_OK) {
+            ESP.restart();
+        }
+    }
+    return false;
+}
+
+void otaConfirmBoot() {
+    Preferences prefs;
+    prefs.begin("ota", false);
+    if (prefs.getUChar("pending", 0)) {
+        prefs.putUChar("pending", 0);
+        prefs.putUChar("tries", 0);
+    }
+    prefs.end();
+}
+
+bool otaWasRolledBack() {
+    Preferences prefs;
+    prefs.begin("ota", false);
+    bool rolled = prefs.getUChar("rolledback", 0) != 0;
+    if (rolled) prefs.putUChar("rolledback", 0);
+    prefs.end();
+    return rolled;
 }

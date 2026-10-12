@@ -1074,6 +1074,12 @@ void updatePingTime() {
         static bool fwVersionReported = false;
         if (!fwVersionReported) {
             fwVersionReported = fbSetStringChecked("Params/FW_VERSION", FW_VERSION, "fw_version");
+            if (fwVersionReported) {
+                otaConfirmBoot();
+                if (otaWasRolledBack()) {
+                    pushoverQueueEnqueue("Yeni firmware acilmadi, onceki surume (" FW_VERSION ") geri donuldu.");
+                }
+            }
         }
 
         if (pressureDefaultMinLimitValue > 0) {
@@ -1111,6 +1117,7 @@ void updatePingTime() {
 
 void setup(){
 	Serial.begin(115200);
+    otaBootCheck();
 
     for (int i = 0; i < RELAY_COUNT; i++) {
         relay[i].TurnOff();
