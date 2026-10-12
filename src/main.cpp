@@ -34,6 +34,9 @@
 // ardından web/firmware klasörünü commit/push edin. 
 // Azure dağıtımı bitince röleler kapalıyken Params/Command = -7 yazın.
 
+//https://thankful-meadow-0dd652c03.6.azurestaticapps.net/firmware/version.json
+
+
 //RTC_DATA_ATTR int bootCount = 0;
 
 //pushover diye bir uygulmayı kullanarak iphone bildirim gönderme işlemi yapılabilir.
