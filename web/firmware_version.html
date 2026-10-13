@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firmware Sürümü</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 32px 16px;
+            background: #f4f4f9;
+            color: #222;
+        }
+        main {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        h1 { text-align: center; }
+        section {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            margin: 16px 0;
+            padding: 20px 24px;
+        }
+        h2 { margin-top: 0; }
+        .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            overflow-wrap: anywhere;
+        }
+        dl {
+            display: grid;
+            grid-template-columns: minmax(100px, 140px) 1fr;
+            gap: 10px 16px;
+            margin-bottom: 0;
+        }
+        dt { color: #555; }
+        dd { margin: 0; overflow-wrap: anywhere; }
+        .status { color: #555; }
+        .error { color: #b91c1c; }
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 22px;
+            border: 0;
+            border-radius: 6px;
+            background: #007bff;
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        @media (max-width: 480px) {
+            dl { grid-template-columns: 1fr; gap: 4px; }
+            dd { margin-bottom: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Firmware Sürümü</h1>
+        <section>
+            <h2>Firebase'de çalışan sürüm</h2>
+            <div id="currentVersion" class="value">Yükleniyor…</div>
+        </section>
+        <section>
+            <h2>Yayındaki son sürüm metadatası</h2>
+            <dl>
+                <dt>Sürüm</dt><dd id="latestVersion">Yükleniyor…</dd>
+                <dt>Dosya</dt><dd id="latestFile">—</dd>
+                <dt>Boyut</dt><dd id="latestSize">—</dd>
+                <dt>SHA-256</dt><dd id="latestSha256">—</dd>
+            </dl>
+        </section>
+        <p id="status" class="status" role="status"></p>
+        <button type="button" id="refreshButton">Yenile</button>
+    </main>
+    <script>
+        const fields = {
+            currentVersion: document.getElementById('currentVersion'),
+            latestVersion: document.getElementById('latestVersion'),
+            latestFile: document.getElementById('latestFile'),
+            latestSize: document.getElementById('latestSize'),
+            latestSha256: document.getElementById('latestSha256'),
+            status: document.getElementById('status')
+        };
+
+        async function loadVersions() {
+            fields.status.className = 'status';
+            fields.status.textContent = 'Bilgiler yükleniyor…';
+            fields.currentVersion.textContent = 'Yükleniyor…';
+            fields.latestVersion.textContent = 'Yükleniyor…';
+            fields.latestFile.textContent = '—';
+            fields.latestSize.textContent = '—';
+            fields.latestSha256.textContent = '—';
+
+            const [firebaseResult, metadataResult] = await Promise.allSettled([
+                fetch('/api/firmware-version', { cache: 'no-store' }).then(response => {
+                    if (!response.ok) throw new Error(`Firebase API HTTP ${response.status}`);
+                    return response.json();
+                }),
+                fetch('/firmware/version.json', { cache: 'no-store' }).then(response => {
+                    if (!response.ok) throw new Error(`Metadata HTTP ${response.status}`);
+                    return response.json();
+                })
+            ]);
+
+            const errors = [];
+            let currentVersion;
+            let latestVersion;
+
+            if (firebaseResult.status === 'fulfilled' && firebaseResult.value.ok) {
+                currentVersion = firebaseResult.value.version;
+                fields.currentVersion.textContent = currentVersion || 'Bilgi bulunamadı';
+            } else {
+                fields.currentVersion.textContent = 'Okunamadı';
+                errors.push('Firebase sürümü okunamadı.');
+            }
+
+            if (metadataResult.status === 'fulfilled' && metadataResult.value.version) {
+                const metadata = metadataResult.value;
+                latestVersion = metadata.version;
+                fields.latestVersion.textContent = metadata.version;
+                fields.latestFile.textContent = metadata.file || 'Belirtilmemiş';
+                fields.latestSize.textContent = Number.isFinite(metadata.size)
+                    ? `${metadata.size.toLocaleString('tr-TR')} bayt`
+                    : 'Belirtilmemiş';
+                fields.latestSha256.textContent = metadata.sha256 || 'Belirtilmemiş';
+            } else {
+                fields.latestVersion.textContent = 'Okunamadı';
+                errors.push('Yayın metadatası okunamadı.');
+            }
+
+            if (errors.length) {
+                fields.status.className = 'error';
+                fields.status.textContent = errors.join(' ');
+            } else {
+                fields.status.textContent = currentVersion === latestVersion
+                    ? 'Firebase sürümü yayındaki son sürümle aynı.'
+                    : 'Firebase sürümü ile yayındaki son sürüm farklı.';
+            }
+        }
+
+        document.getElementById('refreshButton').addEventListener('click', loadVersions);
+        loadVersions();
+    </script>
+</body>
+</html>
