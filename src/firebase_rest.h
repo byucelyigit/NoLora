@@ -11,6 +11,7 @@ public:
     int getInt(const String& path);
     // HTTP kodunu doner; basarili GET'te payload doldurulur.
     int getRaw(const String& path, String& payload);
+    int getRawFirstChildren(const String& path, uint16_t limit, String& payload);
 
     // Asagidakiler HTTP kodunu doner (basari 200), token alinamazsa -1.
     int setInt(const String& path, int value);
@@ -28,5 +29,11 @@ private:
 
     bool ensureToken();
     bool login();
-    int request(const char* method, const String& path, const String* body, String* response);
+    int request(
+        const char* method,
+        const String& path,
+        const String* body,
+        String* response,
+        const String* query = nullptr
+    );
 };

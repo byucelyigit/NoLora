@@ -93,7 +93,13 @@ bool FirebaseRest::ensureToken() {
     return false;
 }
 
-int FirebaseRest::request(const char* method, const String& path, const String* body, String* response) {
+int FirebaseRest::request(
+    const char* method,
+    const String& path,
+    const String* body,
+    String* response,
+    const String* query
+) {
     if (!ensureToken()) {
         return -1;
     }
@@ -105,6 +111,10 @@ int FirebaseRest::request(const char* method, const String& path, const String* 
     http.setTimeout(HTTP_TIMEOUT_MS);
 
     String url = _baseUrl + path + ".json?auth=" + _idToken;
+    if (query && query->length() > 0) {
+        url += "&";
+        url += *query;
+    }
     if (!http.begin(client, url)) {
         return -1;
     }
@@ -132,6 +142,14 @@ int FirebaseRest::request(const char* method, const String& path, const String* 
 
 int FirebaseRest::getRaw(const String& path, String& payload) {
     return request("GET", path, nullptr, &payload);
+}
+
+int FirebaseRest::getRawFirstChildren(const String& path, uint16_t limit, String& payload) {
+    if (limit == 0) {
+        return -1;
+    }
+    String query = "orderBy=%22%24key%22&limitToFirst=" + String(limit);
+    return request("GET", path, nullptr, &payload, &query);
 }
 
 int FirebaseRest::getInt(const String& path) {

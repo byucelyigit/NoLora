@@ -63,7 +63,7 @@
         .status.success { color: #166534; }
         .chart-wrap { position: relative; height: 360px; margin-top: 14px; }
         canvas { width: 100%; height: 100%; }
-        .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+        .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
         .metric { padding: 12px; background: #f8fafc; border-radius: 9px; }
         .metric span { display: block; color: #64748b; font-size: 13px; }
         .metric strong { display: block; margin-top: 4px; font-size: 18px; }
@@ -132,8 +132,9 @@
                     <div class="metric"><span>Seçili hat kayıtlarının ortalama basıncı</span><strong id="averageMetric">—</strong></div>
                     <div class="metric"><span>Son kaydın min / maks değeri</span><strong id="rangeMetric">—</strong></div>
                     <div class="metric"><span>Son kayıt ile profil farkı (ortalama mutlak)</span><strong id="deviationMetric">—</strong></div>
+                    <div class="metric"><span>İlk dört referansa göre tarama</span><strong id="anomalyMetric">—</strong></div>
                 </div>
-                <p class="hint">Y değerleri sensörün göreceli ölçeğindedir. Kesikli profil çizgisi, seçili örnek aralığındaki tüm çalışmaların noktasal medyanıdır; sapma metriği son kaydı önceki çalışmalarla karşılaştırır ve yalnızca inceleme amaçlıdır.</p>
+                <p class="hint">Y değerleri sensörün göreceli ölçeğindedir. Dört veya daha fazla kayıt varsa kesikli çizgi ilk dört referansın noktasal medyanıdır. Tarama; ilk dört kaydın istatistiksel özelliklerine göre daha düşük basınç profillerini işaretler. Bu sonuç boru patlağını kesin olarak teşhis etmez.</p>
                 <div id="runs" class="runs"></div>
             </section>
         </section>
@@ -195,6 +196,89 @@
             return Number.isFinite(run.intervalSeconds) && run.intervalSeconds > 0
                 ? run.intervalSeconds
                 : 1;
+        }
+
+        function durationOf(run) {
+            return Number.isFinite(run.durationSeconds) && run.durationSeconds > 0
+                ? run.durationSeconds
+                : 0;
+        }
+
+        function profileFeatures(samples) {
+            if (samples.length < 20 || samples.length > 300) return null;
+            const sorted = [...samples].sort((a, b) => a - b);
+            const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+            const variance = Math.max(0,
+                samples.reduce((sum, value) => sum + value * value, 0) / samples.length - mean * mean
+            );
+            return [
+                mean,
+                median(sorted),
+                sorted[Math.floor((sorted.length - 1) * 9 / 10)],
+                sorted[sorted.length - 1],
+                Math.sqrt(variance)
+            ];
+        }
+
+        function profileScore(candidate, references) {
+            const floors = [2, 2, 3, 3, 2];
+            let total = 0;
+            for (let feature = 0; feature < floors.length; feature++) {
+                const values = references.map(reference => reference[feature]);
+                const center = median(values);
+                const mad = median(values.map(value => Math.abs(value - center)));
+                const scale = Math.max(floors[feature], 1.4826 * mad);
+                total += Math.max(0, center - candidate[feature]) / scale;
+            }
+            return total / floors.length;
+        }
+
+        function profileAnalysis() {
+            if (runs.length < 4) return null;
+            const references = runs.slice(0, 4);
+            const firstSamples = samplesOf(references[0]);
+            if (!firstSamples.length || references.some(run =>
+                intervalOf(run) !== intervalOf(references[0]) ||
+                durationOf(run) !== durationOf(references[0]) ||
+                samplesOf(run).length !== firstSamples.length
+            )) return null;
+
+            const referenceFeatures = references.map(run => profileFeatures(samplesOf(run)));
+            if (referenceFeatures.some(features => !features)) return null;
+            let maximumHoldoutScore = 0;
+            for (let heldOut = 0; heldOut < 4; heldOut++) {
+                const training = referenceFeatures.filter((_, index) => index !== heldOut);
+                maximumHoldoutScore = Math.max(
+                    maximumHoldoutScore,
+                    profileScore(referenceFeatures[heldOut], training)
+                );
+            }
+            const threshold = maximumHoldoutScore + 0.25;
+            const candidates = new Map();
+            runs.slice(4).forEach(run => {
+                if (intervalOf(run) !== intervalOf(references[0]) ||
+                    durationOf(run) !== durationOf(references[0]) ||
+                    samplesOf(run).length !== firstSamples.length) {
+                    candidates.set(run.runId, { label: "Parametreleri uyumsuz" });
+                    return;
+                }
+                const features = profileFeatures(samplesOf(run));
+                if (!features) {
+                    candidates.set(run.runId, { label: "Analiz edilemedi" });
+                    return;
+                }
+                const score = profileScore(features, referenceFeatures);
+                const anomalous = score > threshold;
+                candidates.set(run.runId, {
+                    score,
+                    threshold,
+                    anomalous,
+                    label: anomalous
+                        ? (score >= threshold * 2 ? "Belirgin basınç anomalisi" : "Sınırda basınç anomalisi")
+                        : "Referans aralığında"
+                });
+            });
+            return { threshold, candidates };
         }
 
         function resizeCanvas() {
@@ -279,11 +363,10 @@
                 context.stroke();
             });
 
-            const latestRun = validRuns[validRuns.length - 1];
-            const profileRuns = validRuns.filter(run =>
-                intervalOf(run) === intervalOf(latestRun)
-            );
-            const profileInterval = intervalOf(latestRun);
+            const profileRuns = validRuns.length >= 4
+                ? validRuns.slice(0, 4)
+                : validRuns.filter(run => intervalOf(run) === intervalOf(validRuns[validRuns.length - 1]));
+            const profileInterval = intervalOf(profileRuns[0]);
             const profileLength = profileRuns.reduce((maximum, run) =>
                 Math.max(maximum, samplesOf(run).length), 0);
             const profile = Array.from({ length: profileLength }, (_, index) => {
@@ -336,6 +419,18 @@
             } else {
                 document.getElementById("deviationMetric").textContent = "—";
             }
+
+            const analysis = profileAnalysis();
+            const anomalyMetric = document.getElementById("anomalyMetric");
+            if (!analysis) {
+                anomalyMetric.textContent = "4 uyumlu referans gerekli";
+            } else {
+                const flagged = [...analysis.candidates.values()]
+                    .filter(result => result.anomalous).length;
+                anomalyMetric.textContent = analysis.candidates.size
+                    ? `${flagged} şüpheli · eşik ${analysis.threshold.toFixed(2)}`
+                    : "Referans hazır · aday bekleniyor";
+            }
         }
 
         function renderRuns() {
@@ -347,6 +442,7 @@
                 empty.textContent = "Bu hatta ait kayıt bulunmuyor.";
                 container.append(empty);
             } else {
+                const analysis = profileAnalysis();
                 runs.slice().reverse().forEach((run, index) => {
                     const row = document.createElement("div");
                     row.className = "run";
@@ -358,7 +454,16 @@
                         `Çalıştırma ${runs.length - index} · ${samplesOf(run).length} örnek · ${run.intervalSeconds ?? "?"} sn aralık`
                     ));
                     const id = document.createElement("span");
-                    id.textContent = String(run.runId || "").slice(-8);
+                    if (analysis && index >= runs.length - 4) {
+                        id.textContent = "Referans";
+                    } else if (analysis) {
+                        const result = analysis.candidates.get(run.runId);
+                        id.textContent = result && Number.isFinite(result.score)
+                            ? `${result.label} · ${result.score.toFixed(2)} / ${result.threshold.toFixed(2)}`
+                            : result?.label || String(run.runId || "").slice(-8);
+                    } else {
+                        id.textContent = String(run.runId || "").slice(-8);
+                    }
                     row.append(label, id);
                     container.append(row);
                 });

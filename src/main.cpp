@@ -15,6 +15,7 @@
 #include "firebase_rest.h"
 #include "ota_update.h"
 #include "secrets.h"
+#include "pressure_profile.h"
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  10        /* Time ESP32 will go to sleep (in seconds) */
@@ -101,6 +102,7 @@ struct PressureCalibration {
     int samples[CALIBRATION_MAX_SAMPLES] = {0};
 };
 PressureCalibration pressureCalibration;
+static int calibrationReferenceSamples[4][CALIBRATION_MAX_SAMPLES];
 
 bool alarmsynced = false;
 bool systemStartedMsgSent = false;
@@ -377,7 +379,14 @@ Relay relay[] = {Relay(0, RELAY1), Relay(1, RELAY2), Relay(2, RELAY3), Relay(3, 
 
 WebServer server(80);
 
-void writeCalibrationStatus(const char* state, const String& message, const String& runId = "") {
+void writeCalibrationStatus(
+    const char* state,
+    const String& message,
+    const String& runId = "",
+    const char* analysis = nullptr,
+    float score = -1,
+    float threshold = -1
+) {
     JsonDocument doc;
     doc["state"] = state;
     doc["message"] = message;
@@ -388,6 +397,11 @@ void writeCalibrationStatus(const char* state, const String& message, const Stri
     if (runId.length() > 0) {
         doc["runId"] = runId;
     }
+    if (analysis) {
+        doc["analysis"] = analysis;
+        doc["anomalyScore"] = score;
+        doc["anomalyThreshold"] = threshold;
+    }
 
     String json;
     serializeJson(doc, json);
@@ -395,6 +409,76 @@ void writeCalibrationStatus(const char* state, const String& message, const Stri
     if (rc != 200) {
         Serial.println("[CAL] Status write failed, HTTP " + String(rc));
     }
+}
+
+bool analyzeCalibrationAgainstFirstFour(
+    const String& runId,
+    PressureProfileAnalysis& analysis
+) {
+    if (pressureCalibration.sampleCount < 20) {
+        return false;
+    }
+
+    String path = "Pressure/Calibrations/Line_" + String(pressureCalibration.line) + "/Runs";
+    String payload;
+    int rc = fb.getRawFirstChildren(path, 4, payload);
+    if (rc != 200) {
+        Serial.println("[CAL] Reference read failed, HTTP " + String(rc));
+        return false;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, payload)) {
+        Serial.println("[CAL] Reference JSON parse failed");
+        return false;
+    }
+
+    const int* referencePointers[4];
+    uint16_t referenceCounts[4] = {0, 0, 0, 0};
+    uint8_t referenceIndex = 0;
+    JsonObjectConst runs = doc.as<JsonObjectConst>();
+    for (JsonPairConst entry : runs) {
+        if (referenceIndex >= 4) {
+            break;
+        }
+
+        JsonObjectConst run = entry.value().as<JsonObjectConst>();
+        if (String(entry.key().c_str()) == runId ||
+            run["intervalSeconds"] != pressureCalibration.intervalMs / 1000UL ||
+            run["durationSeconds"] != pressureCalibration.durationMs / 1000UL) {
+            return false;
+        }
+
+        JsonArrayConst samples = run["samples"].as<JsonArrayConst>();
+        if (samples.size() != pressureCalibration.sampleCount ||
+            samples.size() > PRESSURE_PROFILE_MAX_SAMPLES) {
+            return false;
+        }
+
+        uint16_t sampleIndex = 0;
+        for (JsonVariantConst sample : samples) {
+            if (!sample.is<int>()) {
+                return false;
+            }
+            calibrationReferenceSamples[referenceIndex][sampleIndex++] = sample.as<int>();
+        }
+        referenceCounts[referenceIndex] = sampleIndex;
+        referencePointers[referenceIndex] = calibrationReferenceSamples[referenceIndex];
+        referenceIndex++;
+    }
+
+    if (referenceIndex != 4) {
+        return false;
+    }
+
+    analysis = pressureProfileAnalyze(
+        referencePointers,
+        referenceCounts,
+        referenceIndex,
+        pressureCalibration.samples,
+        pressureCalibration.sampleCount
+    );
+    return true;
 }
 
 void finishPressureCalibration(const char* failureMessage = nullptr) {
@@ -440,8 +524,38 @@ void finishPressureCalibration(const char* failureMessage = nullptr) {
 
     String message = "Kalibrasyon tamamlandi. Hat " + String(pressureCalibration.line) +
         ", ornek sayisi " + String(pressureCalibration.sampleCount);
+    PressureProfileAnalysis analysis;
+    if (analyzeCalibrationAgainstFirstFour(runId, analysis)) {
+        if (analysis.anomalous) {
+            const bool strongAnomaly = analysis.score >= analysis.threshold * 2.0f;
+            message += strongAnomaly
+                ? ". Belirgin basinc profili anomalisi"
+                : ". Sinirda basinc profili anomalisi";
+            Serial.println("[CAL] " + message + ", score=" + String(analysis.score, 2) +
+                ", threshold=" + String(analysis.threshold, 2));
+            writeCalibrationStatus(
+                "complete", message, runId,
+                strongAnomaly ? "strong_suspect" : "borderline_suspect",
+                analysis.score, analysis.threshold
+            );
+            pushover.sendNotification(
+                (strongAnomaly ? "Belirgin basinc profili anomalisi. Hat "
+                    : "Sinirda basinc profili anomalisi. Hat ") +
+                String(pressureCalibration.line) +
+                ", skor " + String(analysis.score, 2) +
+                ", esik " + String(analysis.threshold, 2)
+            );
+            return;
+        }
+        message += ". Profil referans araliginda";
+        writeCalibrationStatus(
+            "complete", message, runId, "normal", analysis.score, analysis.threshold
+        );
+    } else {
+        message += ". Anomali analizi tamamlanamadi";
+        writeCalibrationStatus("complete", message, runId, "unavailable");
+    }
     Serial.println("[CAL] " + message + ", runId=" + runId);
-    writeCalibrationStatus("complete", message, runId);
     pushover.sendNotification(message);
 }
 
