@@ -133,7 +133,7 @@
                     <div class="metric"><span>Son kaydın min / maks değeri</span><strong id="rangeMetric">—</strong></div>
                     <div class="metric"><span>Son kayıt ile profil farkı (ortalama mutlak)</span><strong id="deviationMetric">—</strong></div>
                 </div>
-                <p class="hint">Y değerleri sensörün göreceli ölçeğindedir. Kesikli profil çizgisi, son kayıtla aynı örnek aralığındaki çalışmaların noktasal medyanıdır; sapma yalnızca inceleme amaçlıdır.</p>
+                <p class="hint">Y değerleri sensörün göreceli ölçeğindedir. Kesikli profil çizgisi, seçili örnek aralığındaki tüm çalışmaların noktasal medyanıdır; sapma metriği son kaydı önceki çalışmalarla karşılaştırır ve yalnızca inceleme amaçlıdır.</p>
                 <div id="runs" class="runs"></div>
             </section>
         </section>
@@ -280,10 +280,9 @@
             });
 
             const latestRun = validRuns[validRuns.length - 1];
-            const previousProfileRuns = validRuns.slice(0, -1).filter(run =>
-                intervalOf(run) === intervalOf(validRuns[validRuns.length - 1])
+            const profileRuns = validRuns.filter(run =>
+                intervalOf(run) === intervalOf(latestRun)
             );
-            const profileRuns = previousProfileRuns.length ? previousProfileRuns : [latestRun];
             const profileInterval = intervalOf(latestRun);
             const profileLength = profileRuns.reduce((maximum, run) =>
                 Math.max(maximum, samplesOf(run).length), 0);
