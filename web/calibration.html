@@ -391,7 +391,7 @@
                 runs = Object.entries(data.runs || {})
                     .map(([runId, run]) => ({ ...run, runId }))
                     .filter(run => validSamples(run.samples))
-                    .sort((a, b) => a.runId.localeCompare(b.runId));
+                    .sort((a, b) => a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0);
                 deviceState = data.status;
                 updateDeviceStatus();
                 renderRuns();
