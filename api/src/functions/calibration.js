@@ -8,6 +8,7 @@ const {
 
 const RELAY_COUNT = 4;
 const MAX_SAMPLES = 300;
+const REFERENCE_RUN_COUNT = 4;
 const CALIBRATION_PATH = 'Pressure/Calibration';
 const COMMAND_CALIBRATION = -8;
 
@@ -83,8 +84,26 @@ app.http('calibration', {
                     };
                 }
 
-                await firebaseDelete(runsPath(line));
-                return { status: 200, jsonBody: { ok: true, line } };
+                const runs = await firebaseRead(runsPath(line));
+                const runIds = runs && typeof runs === 'object' && !Array.isArray(runs)
+                    ? Object.keys(runs).sort()
+                    : [];
+                const referenceRunIds = runIds.slice(0, REFERENCE_RUN_COUNT);
+                const removableRunIds = runIds.slice(REFERENCE_RUN_COUNT);
+
+                await Promise.all(removableRunIds.map(runId =>
+                    firebaseDelete(`${runsPath(line)}/${runId}`)
+                ));
+
+                return {
+                    status: 200,
+                    jsonBody: {
+                        ok: true,
+                        line,
+                        preserved: referenceRunIds.length,
+                        deleted: removableRunIds.length
+                    }
+                };
             } catch (err) {
                 context.error(err);
                 return {

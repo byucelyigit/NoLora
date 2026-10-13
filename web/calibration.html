@@ -109,7 +109,7 @@
                     </div>
                     <div class="actions">
                         <button id="startButton" type="submit">Kalibrasyonu başlat</button>
-                        <button id="deleteButton" class="danger" type="button">Seçili hattın verilerini sil</button>
+                        <button id="deleteButton" class="danger" type="button">Referans dışı kayıtları sil</button>
                         <button id="refreshButton" class="secondary" type="button">Yenile</button>
                     </div>
                 </form>
@@ -545,14 +545,22 @@
 
         deleteButton.addEventListener("click", async () => {
             const line = lineInput.value;
-            if (!confirm(`Hat ${line} için kayıtlı tüm kalibrasyon verileri silinsin mi?`)) return;
+            const referenceCount = Math.min(runs.length, 4);
+            const removableCount = Math.max(0, runs.length - referenceCount);
+            if (!confirm(
+                `Hat ${line} için ${removableCount} referans dışı kayıt silinsin mi? ` +
+                `İlk ${referenceCount} referans kayıt korunacak.`
+            )) return;
 
             deleteButton.disabled = true;
             try {
-                await requestJson(`/api/calibration?line=${encodeURIComponent(line)}`, {
+                const result = await requestJson(`/api/calibration?line=${encodeURIComponent(line)}`, {
                     method: "DELETE"
                 });
-                showStatus(`Hat ${line} kalibrasyon kayıtları silindi.`, "success");
+                showStatus(
+                    `Hat ${line}: ${result.deleted} kayıt silindi, ${result.preserved} referans kayıt korundu.`,
+                    "success"
+                );
                 await loadData();
             } catch (error) {
                 showStatus(`Kayıtlar silinemedi: ${error.message}`, "error");
