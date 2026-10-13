@@ -85,6 +85,23 @@ int pressureLostState = -1; // -1: bilinmiyor, 0: normal, 1: kayip
 long lastPingUpdate = 0;
 bool alarmStartNotificationSent[ALARM_COUNT] = {false};
 
+const uint16_t CALIBRATION_MAX_SAMPLES = 300;
+const int CALIBRATION_COMMAND = -8;
+struct PressureCalibration {
+    bool active = false;
+    uint8_t line = 0;
+    uint32_t durationMs = 0;
+    uint32_t intervalMs = 0;
+    unsigned long startedAt = 0;
+    unsigned long nextSampleAt = 0;
+    uint16_t targetSamples = 0;
+    uint16_t sampleCount = 0;
+    uint64_t pressureTotal = 0;
+    uint32_t pressureReadings = 0;
+    int samples[CALIBRATION_MAX_SAMPLES] = {0};
+};
+PressureCalibration pressureCalibration;
+
 bool alarmsynced = false;
 bool systemStartedMsgSent = false;
 
@@ -360,6 +377,155 @@ Relay relay[] = {Relay(0, RELAY1), Relay(1, RELAY2), Relay(2, RELAY3), Relay(3, 
 
 WebServer server(80);
 
+void writeCalibrationStatus(const char* state, const String& message, const String& runId = "") {
+    JsonDocument doc;
+    doc["state"] = state;
+    doc["message"] = message;
+    doc["line"] = pressureCalibration.line;
+    doc["durationMinutes"] = pressureCalibration.durationMs / 60000UL;
+    doc["intervalSeconds"] = pressureCalibration.intervalMs / 1000UL;
+    doc["sampleCount"] = pressureCalibration.sampleCount;
+    if (runId.length() > 0) {
+        doc["runId"] = runId;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    int rc = fb.setJson("Pressure/Calibration/Status", json);
+    if (rc != 200) {
+        Serial.println("[CAL] Status write failed, HTTP " + String(rc));
+    }
+}
+
+void finishPressureCalibration(const char* failureMessage = nullptr) {
+    if (!pressureCalibration.active) {
+        return;
+    }
+
+    relay[pressureCalibration.line - 1].TurnOff(9);
+    pressureCalibration.active = false;
+
+    if (failureMessage) {
+        Serial.println("[CAL] " + String(failureMessage));
+        writeCalibrationStatus("error", failureMessage);
+        pushover.sendNotification("Kalibrasyon başarısız: " + String(failureMessage));
+        return;
+    }
+
+    writeCalibrationStatus("uploading", "Hat kapatıldı; kalibrasyon verisi Firebase'e yazılıyor");
+
+    JsonDocument doc;
+    doc["line"] = pressureCalibration.line;
+    doc["durationSeconds"] = pressureCalibration.durationMs / 1000;
+    doc["intervalSeconds"] = pressureCalibration.intervalMs / 1000;
+    doc["sampleCount"] = pressureCalibration.sampleCount;
+    doc["measurementScale"] = "sensor_10mV_steps";
+    JsonArray samples = doc["samples"].to<JsonArray>();
+    for (uint16_t i = 0; i < pressureCalibration.sampleCount; i++) {
+        samples.add(pressureCalibration.samples[i]);
+    }
+
+    String json;
+    serializeJson(doc, json);
+    String runId;
+    String path = "Pressure/Calibrations/Line_" + String(pressureCalibration.line) + "/Runs";
+    int rc = fb.pushJson(path, json, runId);
+    if (rc != 200) {
+        String message = "Firebase veri yazimi basarisiz (HTTP " + String(rc) + ")";
+        Serial.println("[CAL] " + message);
+        writeCalibrationStatus("error", message);
+        pushover.sendNotification("Kalibrasyon verisi Firebase'e yazilamadi.");
+        return;
+    }
+
+    String message = "Kalibrasyon tamamlandi. Hat " + String(pressureCalibration.line) +
+        ", ornek sayisi " + String(pressureCalibration.sampleCount);
+    Serial.println("[CAL] " + message + ", runId=" + runId);
+    writeCalibrationStatus("complete", message, runId);
+    pushover.sendNotification(message);
+}
+
+void updatePressureCalibration(int pressureValue, unsigned long now) {
+    if (!pressureCalibration.active) {
+        return;
+    }
+    if (relay[pressureCalibration.line - 1].status != Relay::RELAY_ON) {
+        finishPressureCalibration("Kalibrasyon hattı beklenmedik şekilde kapandı");
+        return;
+    }
+
+    pressureCalibration.pressureTotal += static_cast<uint32_t>(pressureValue);
+    pressureCalibration.pressureReadings++;
+
+    if (static_cast<long>(now - pressureCalibration.nextSampleAt) >= 0 &&
+        pressureCalibration.sampleCount < pressureCalibration.targetSamples) {
+        int average = pressureCalibration.pressureReadings > 0
+            ? static_cast<int>(pressureCalibration.pressureTotal / pressureCalibration.pressureReadings)
+            : pressureValue;
+        pressureCalibration.samples[pressureCalibration.sampleCount++] = average;
+        pressureCalibration.pressureTotal = 0;
+        pressureCalibration.pressureReadings = 0;
+        pressureCalibration.nextSampleAt = now + pressureCalibration.intervalMs;
+    }
+
+    if (now - pressureCalibration.startedAt >= pressureCalibration.durationMs) {
+        finishPressureCalibration();
+    }
+}
+
+void startPressureCalibration() {
+    int line = fb.getInt("Params/n");
+    int durationMinutes = fb.getInt("Params/x");
+    int intervalSeconds = fb.getInt("Params/y");
+
+    if (line < 1 || line > RELAY_COUNT ||
+        durationMinutes < 1 || durationMinutes > 1440 ||
+        intervalSeconds < 1 || intervalSeconds > 86400) {
+        pressureCalibration.line = line >= 1 && line <= RELAY_COUNT ? line : 0;
+        writeCalibrationStatus("error", "Kalibrasyon parametreleri gecersiz");
+        pushover.sendNotification("Kalibrasyon baslatilamadi: parametreler gecersiz.");
+        return;
+    }
+
+    uint32_t durationSeconds = static_cast<uint32_t>(durationMinutes) * 60UL;
+    uint32_t calculatedSamples = durationSeconds / static_cast<uint32_t>(intervalSeconds);
+    if (calculatedSamples == 0) {
+        pressureCalibration.line = static_cast<uint8_t>(line);
+        writeCalibrationStatus("error", "Sure, ornek araligindan kisa");
+        pushover.sendNotification("Kalibrasyon baslatilamadi: sure ornek araligindan kisa.");
+        return;
+    }
+
+    for (int i = 0; i < RELAY_COUNT; i++) {
+        if (relay[i].status == Relay::RELAY_ON) {
+            pressureCalibration.line = static_cast<uint8_t>(line);
+            writeCalibrationStatus("error", "Kalibrasyon icin once tum hatlar kapali olmali");
+            pushover.sendNotification("Kalibrasyon baslatilmadi: once aktif sulamayi tamamlayin.");
+            return;
+        }
+    }
+
+    pressureCalibration.active = true;
+    pressureCalibration.line = static_cast<uint8_t>(line);
+    pressureCalibration.durationMs = durationSeconds * 1000UL;
+    pressureCalibration.intervalMs = static_cast<uint32_t>(intervalSeconds) * 1000UL;
+    pressureCalibration.targetSamples = static_cast<uint16_t>(
+        calculatedSamples > CALIBRATION_MAX_SAMPLES ? CALIBRATION_MAX_SAMPLES : calculatedSamples
+    );
+    pressureCalibration.sampleCount = 0;
+    pressureCalibration.pressureTotal = 0;
+    pressureCalibration.pressureReadings = 0;
+
+    String message = "Kalibrasyon modu basladi. Hat " + String(line) +
+        ", sure " + String(durationMinutes) + " dakika.";
+    writeCalibrationStatus("running", message);
+    pushover.sendNotification(message);
+    Serial.println("[CAL] " + message);
+    pressureCalibration.startedAt = millis();
+    pressureCalibration.nextSampleAt = pressureCalibration.startedAt + pressureCalibration.intervalMs;
+    relay[line - 1].TurnOn(9);
+}
+
 
 void printMessage(String payload, int x, int y) {
   int lenString = payload.length();
@@ -519,7 +685,10 @@ void onAlarmStatusChange(int alarmNo, Alarm::AlarmStatus newStatus) // Corrected
     }
 }
 
-void onRelayStateChange(int relayNo, bool isOn, int) {
+void onRelayStateChange(int relayNo, bool isOn, int reason) {
+    if (reason == 9) {
+        return;
+    }
     String statusPath = "relays/state/relay" + String(relayNo);
     fbSetIntChecked(statusPath, isOn ? 1 : 0, "relay_state");
 }
@@ -898,6 +1067,9 @@ bool syncRtcFromInternetTurkeyTime() {
 
 void ExecuteCommandFromFirebase()
 {
+    if (pressureCalibration.active) {
+        return;
+    }
 
     static unsigned long lastCheck = 0;
     unsigned long currentMillis = millis();
@@ -916,6 +1088,18 @@ void ExecuteCommandFromFirebase()
     setDbActivity('\0');
     if (command == -1) {
         return; // No command or error
+    }
+
+    if (command == CALIBRATION_COMMAND) {
+        int resetCode = fb.setInt("Params/Command", -1);
+        if (resetCode != 200) {
+            Serial.println("[CAL] Unable to acknowledge command, HTTP " + String(resetCode));
+            writeCalibrationStatus("error", "Kalibrasyon komutu Firebase'de onaylanamadi");
+            pushover.sendNotification("Kalibrasyon baslatilmadi: komut onaylanamadi.");
+            return;
+        }
+        startPressureCalibration();
+        return;
     }
     
     //command -2 ise o zaman sistem reset işlemini çalıştır
@@ -1057,6 +1241,10 @@ void checkWiFiReconnect() {
 }
 
 void updatePingTime() {
+    if (pressureCalibration.active) {
+        return;
+    }
+
     long currentMillis = millis();
     if (currentMillis - lastPingUpdate >= 30000) {
         lastPingUpdate = currentMillis;
@@ -1332,6 +1520,8 @@ void loop() {
         }
     }
 
+    updatePressureCalibration(pressureValue, currentMillis);
+
     // Example: Print JSON representation of the first alarm
     if (Serial.available()) {
         char command = Serial.read();
@@ -1344,17 +1534,22 @@ void loop() {
     //performMDNSLookup("example.local"); // Replace "example.local" with the desired mDNS hostname
 
     RtcDateTime now = Rtc.GetDateTime();
-    if (WiFi.status() == WL_CONNECTED && pressureDefaultMinLimitRefreshPending) {
+    if (!pressureCalibration.active && WiFi.status() == WL_CONNECTED &&
+        pressureDefaultMinLimitRefreshPending) {
         refreshPressureDefaultMinLimitFromFirebase();
     }
     if (screenOn) {
         showInfoPage(currentInfoPage, now, pressureCurrent);
     }
-    for (int i = 0; i < 8; i++) {
-        alrm[i].Update(now);
+    if (!pressureCalibration.active) {
+        for (int i = 0; i < ALARM_COUNT; i++) {
+            alrm[i].Update(now);
+        }
     }
 
-    pushoverQueueFlush(pushover);
+    if (!pressureCalibration.active) {
+        pushoverQueueFlush(pushover);
+    }
 
 	String status = "OK";
 	long reading = 0;
@@ -1401,8 +1596,12 @@ void loop() {
     server.handleClient();
     ExecuteCommandFromFirebase();
     server.handleClient();
-    updatePingTime();
+    if (!pressureCalibration.active) {
+        updatePingTime();
+    }
     // Faz 2: Kuyrukta bekleyen Firebase yazimlarini kisa sure bütçesiyle gönder
-    fbQueueFlush();
+    if (!pressureCalibration.active) {
+        fbQueueFlush();
+    }
     server.handleClient();
 }

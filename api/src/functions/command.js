@@ -1,5 +1,9 @@
 const { app } = require('@azure/functions');
-const { firebaseWrite, isKurudereAdmin } = require('../shared/firebase');
+const {
+    firebaseRead,
+    firebaseWrite,
+    isKurudereAdmin
+} = require('../shared/firebase');
 
 // 11..18 = röle ON, 21..28 = röle OFF
 function isValidCommand(value) {
@@ -39,6 +43,17 @@ app.http('command', {
         }
 
         try {
+            const calibrationStatus = await firebaseRead('Pressure/Calibration/Status');
+            if (
+                calibrationStatus &&
+                ['queued', 'running', 'uploading'].includes(calibrationStatus.state)
+            ) {
+                return {
+                    status: 409,
+                    jsonBody: { ok: false, error: 'Commands are disabled during calibration' }
+                };
+            }
+
             await firebaseWrite('Params/Command', command);
 
             return { status: 200, jsonBody: { ok: true, command } };

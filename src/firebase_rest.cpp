@@ -170,3 +170,24 @@ int FirebaseRest::pushString(const String& path, const String& value) {
 int FirebaseRest::setJson(const String& path, const String& json) {
     return request("PUT", path, &json, nullptr);
 }
+
+int FirebaseRest::pushJson(const String& path, const String& json, String& key) {
+    String response;
+    int code = request("POST", path, &json, &response);
+    if (code != HTTP_CODE_OK) {
+        return code;
+    }
+
+    JsonDocument result;
+    if (deserializeJson(result, response)) {
+        return -1;
+    }
+
+    const char* name = result["name"];
+    if (!name || name[0] == '\0') {
+        return -1;
+    }
+
+    key = name;
+    return code;
+}

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basınç Kalibrasyonu</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #1e293b;
+            background: #f1f5f9;
+        }
+        body { margin: 0; padding: 24px; }
+        main {
+            max-width: 1000px;
+            margin: 0 auto;
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid #dbe5ee;
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+        }
+        header { padding: 20px 24px; background: #f8fbff; border-bottom: 1px solid #e5edf5; }
+        h1 { margin: 0; font-size: 26px; }
+        h2 { margin: 0; font-size: 18px; }
+        .sub, .hint { color: #64748b; }
+        .sub { margin: 6px 0 0; }
+        .content { display: grid; gap: 20px; padding: 24px; }
+        .card { padding: 18px; border: 1px solid #e2e8f0; border-radius: 12px; }
+        .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        label { display: grid; gap: 7px; font-weight: 600; }
+        input, select {
+            box-sizing: border-box;
+            width: 100%;
+            min-height: 44px;
+            padding: 9px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 9px;
+            font: inherit;
+        }
+        button {
+            min-height: 42px;
+            padding: 9px 14px;
+            border: 0;
+            border-radius: 9px;
+            background: #2563eb;
+            color: #fff;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover:not(:disabled) { background: #1d4ed8; }
+        button:disabled { cursor: wait; opacity: 0.6; }
+        .danger { background: #dc2626; }
+        .danger:hover:not(:disabled) { background: #b91c1c; }
+        .secondary { background: #475569; }
+        .actions, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .actions { margin-top: 14px; flex-wrap: wrap; }
+        .hint { margin: 12px 0 0; font-size: 13px; }
+        .status { min-height: 21px; margin: 14px 0 0; }
+        .status.error { color: #b91c1c; }
+        .status.success { color: #166534; }
+        .chart-wrap { position: relative; height: 360px; margin-top: 14px; }
+        canvas { width: 100%; height: 100%; }
+        .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+        .metric { padding: 12px; background: #f8fafc; border-radius: 9px; }
+        .metric span { display: block; color: #64748b; font-size: 13px; }
+        .metric strong { display: block; margin-top: 4px; font-size: 18px; }
+        .runs { display: grid; gap: 8px; margin-top: 12px; }
+        .run { display: flex; justify-content: space-between; gap: 12px; padding: 10px; background: #f8fafc; border-radius: 8px; font-size: 14px; }
+        .empty { color: #64748b; }
+        footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 24px 22px; }
+        @media (max-width: 650px) {
+            body { padding: 12px; }
+            .content { padding: 14px; }
+            .form-grid, .metrics { grid-template-columns: 1fr; }
+            .chart-wrap { height: 280px; }
+            .section-heading { align-items: flex-start; flex-direction: column; }
+            footer { padding: 0 14px 14px; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <header>
+            <h1>Basınç Kalibrasyonu</h1>
+            <p class="sub">Hat başına tekrarlı basınç profilleri toplayın ve karşılaştırın.</p>
+        </header>
+        <section class="content">
+            <section class="card" aria-labelledby="settingsTitle">
+                <h2 id="settingsTitle">Yeni ölçüm</h2>
+                <form id="calibrationForm">
+                    <div class="form-grid">
+                        <label for="line">Hat numarası
+                            <select id="line" name="line">
+                                <option value="1">Hat 1</option>
+                                <option value="2">Hat 2</option>
+                                <option value="3">Hat 3</option>
+                                <option value="4">Hat 4</option>
+                            </select>
+                        </label>
+                        <label for="duration">Çalışma süresi (dakika)
+                            <input id="duration" name="duration" type="number" min="1" max="1440" step="1" value="5" required>
+                        </label>
+                        <label for="interval">Örnek aralığı (saniye)
+                            <input id="interval" name="interval" type="number" min="1" max="86400" step="1" value="1" required>
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button id="startButton" type="submit">Kalibrasyonu başlat</button>
+                        <button id="deleteButton" class="danger" type="button">Seçili hattın verilerini sil</button>
+                        <button id="refreshButton" class="secondary" type="button">Yenile</button>
+                    </div>
+                </form>
+                <p class="hint">Örnek sayısı süre ve aralıktan hesaplanır; cihaz 300 örnekten fazlasını toplamaz. Kalibrasyon sırasında başka sulama yapılmaz. Başlatmadan önce tüm hatların kapalı olması gerekir.</p>
+                <p id="status" class="status" role="status" aria-live="polite"></p>
+            </section>
+
+            <section class="card" aria-labelledby="chartTitle">
+                <div class="section-heading">
+                    <div>
+                        <h2 id="chartTitle">Kalibrasyon kayıtları</h2>
+                        <p id="deviceStatus" class="hint">Cihaz durumu yükleniyor…</p>
+                    </div>
+                    <span id="runCount">0 kayıt</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart" aria-label="Basınç ve süre grafiği"></canvas>
+                </div>
+                <div class="metrics">
+                    <div class="metric"><span>Seçili hat kayıtlarının ortalama basıncı</span><strong id="averageMetric">—</strong></div>
+                    <div class="metric"><span>Son kaydın min / maks değeri</span><strong id="rangeMetric">—</strong></div>
+                    <div class="metric"><span>Son kayıt ile profil farkı (ortalama mutlak)</span><strong id="deviationMetric">—</strong></div>
+                </div>
+                <p class="hint">Y değerleri sensörün göreceli ölçeğindedir. Kesikli profil çizgisi, son kayıtla aynı örnek aralığındaki çalışmaların noktasal medyanıdır; sapma yalnızca inceleme amaçlıdır.</p>
+                <div id="runs" class="runs"></div>
+            </section>
+        </section>
+        <footer>
+            <button type="button" class="secondary" onclick="location.href='pressure.html'">Basınç sayfası</button>
+            <button type="button" class="secondary" onclick="location.href='index.html'">Ana sayfa</button>
+        </footer>
+    </main>
+
+    <script>
+        const form = document.getElementById("calibrationForm");
+        const lineInput = document.getElementById("line");
+        const statusElement = document.getElementById("status");
+        const startButton = document.getElementById("startButton");
+        const deleteButton = document.getElementById("deleteButton");
+        const refreshButton = document.getElementById("refreshButton");
+        const chart = document.getElementById("chart");
+        const runColors = ["#2563eb", "#e11d48", "#059669", "#9333ea", "#d97706", "#0891b2"];
+        let runs = [];
+        let deviceState = null;
+
+        function showStatus(message, kind = "") {
+            statusElement.textContent = message;
+            statusElement.className = `status ${kind}`;
+        }
+
+        async function requestJson(url, options = {}) {
+            const response = await fetch(url, { cache: "no-store", ...options });
+            let data;
+            try {
+                data = await response.json();
+            } catch {
+                throw new Error(`Sunucu yanıtı okunamadı (HTTP ${response.status})`);
+            }
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || `HTTP ${response.status}`);
+            }
+            return data;
+        }
+
+        function validSamples(value) {
+            return Array.isArray(value) && value.length > 0 && value.length <= 300 &&
+                value.every(Number.isFinite);
+        }
+
+        function median(values) {
+            const sorted = [...values].sort((a, b) => a - b);
+            const middle = Math.floor(sorted.length / 2);
+            return sorted.length % 2
+                ? sorted[middle]
+                : (sorted[middle - 1] + sorted[middle]) / 2;
+        }
+
+        function samplesOf(run) {
+            return run && validSamples(run.samples) ? run.samples : [];
+        }
+
+        function intervalOf(run) {
+            return Number.isFinite(run.intervalSeconds) && run.intervalSeconds > 0
+                ? run.intervalSeconds
+                : 1;
+        }
+
+        function resizeCanvas() {
+            const ratio = window.devicePixelRatio || 1;
+            const bounds = chart.getBoundingClientRect();
+            chart.width = Math.max(1, Math.round(bounds.width * ratio));
+            chart.height = Math.max(1, Math.round(bounds.height * ratio));
+            const context = chart.getContext("2d");
+            context.setTransform(ratio, 0, 0, ratio, 0, 0);
+            drawChart(context, bounds.width, bounds.height);
+        }
+
+        function drawChart(context, width, height) {
+            context.clearRect(0, 0, width, height);
+            const padding = { left: 52, right: 18, top: 18, bottom: 42 };
+            const plotWidth = Math.max(1, width - padding.left - padding.right);
+            const plotHeight = Math.max(1, height - padding.top - padding.bottom);
+            const validRuns = runs.filter(run => samplesOf(run).length);
+
+            if (!validRuns.length) {
+                context.fillStyle = "#64748b";
+                context.font = "14px Segoe UI, Arial";
+                context.textAlign = "center";
+                context.fillText("Bu hat için henüz kalibrasyon kaydı yok.", width / 2, height / 2);
+                return;
+            }
+
+            const allValues = validRuns.flatMap(samplesOf);
+            const minValue = allValues.reduce((value, current) => Math.min(value, current), Infinity);
+            const maxValue = allValues.reduce((value, current) => Math.max(value, current), -Infinity);
+            const spread = maxValue - minValue || Math.max(1, Math.abs(maxValue) * 0.1);
+            const low = minValue - spread * 0.08;
+            const high = maxValue + spread * 0.08;
+            const maxTime = validRuns.reduce((maximum, run) =>
+                Math.max(maximum, samplesOf(run).length * intervalOf(run)), 0);
+            const xAtTime = time => padding.left + (maxTime <= 0 ? 0 : time / maxTime) * plotWidth;
+            const yAt = value => padding.top + (high - value) / (high - low) * plotHeight;
+
+            context.font = "12px Segoe UI, Arial";
+            context.strokeStyle = "#e2e8f0";
+            context.fillStyle = "#64748b";
+            context.lineWidth = 1;
+            context.textAlign = "right";
+            for (let tick = 0; tick <= 4; tick++) {
+                const value = low + (high - low) * tick / 4;
+                const y = yAt(value);
+                context.beginPath();
+                context.moveTo(padding.left, y);
+                context.lineTo(width - padding.right, y);
+                context.stroke();
+                context.fillText(value.toFixed(1), padding.left - 8, y + 4);
+            }
+            context.textAlign = "center";
+            for (let tick = 0; tick <= 4; tick++) {
+                const time = maxTime * tick / 4;
+                const x = xAtTime(time);
+                context.beginPath();
+                context.moveTo(x, padding.top);
+                context.lineTo(x, padding.top + plotHeight);
+                context.stroke();
+                context.fillText(`${time.toFixed(0)}s`, x, padding.top + plotHeight + 18);
+            }
+            context.fillText("Geçen süre (saniye)", padding.left + plotWidth / 2, height - 5);
+            context.save();
+            context.translate(14, padding.top + plotHeight / 2);
+            context.rotate(-Math.PI / 2);
+            context.fillText("Sensör değeri (göreceli)", 0, 0);
+            context.restore();
+
+            validRuns.forEach((run, runIndex) => {
+                const values = samplesOf(run);
+                const interval = intervalOf(run);
+                context.beginPath();
+                values.forEach((value, index) => {
+                    const x = xAtTime((index + 1) * interval);
+                    if (index === 0) context.moveTo(x, yAt(value));
+                    else context.lineTo(x, yAt(value));
+                });
+                context.strokeStyle = runColors[runIndex % runColors.length];
+                context.lineWidth = 1.6;
+                context.globalAlpha = 0.62;
+                context.stroke();
+            });
+
+            const latestRun = validRuns[validRuns.length - 1];
+            const previousProfileRuns = validRuns.slice(0, -1).filter(run =>
+                intervalOf(run) === intervalOf(validRuns[validRuns.length - 1])
+            );
+            const profileRuns = previousProfileRuns.length ? previousProfileRuns : [latestRun];
+            const profileInterval = intervalOf(latestRun);
+            const profileLength = profileRuns.reduce((maximum, run) =>
+                Math.max(maximum, samplesOf(run).length), 0);
+            const profile = Array.from({ length: profileLength }, (_, index) => {
+                const values = profileRuns.map(run => samplesOf(run)[index]).filter(Number.isFinite);
+                return values.length ? median(values) : null;
+            });
+            context.beginPath();
+            profile.forEach((value, index) => {
+                if (value === null) return;
+                const x = xAtTime((index + 1) * profileInterval);
+                if (index === 0 || profile[index - 1] === null) context.moveTo(x, yAt(value));
+                else context.lineTo(x, yAt(value));
+            });
+            context.globalAlpha = 1;
+            context.strokeStyle = "#0f172a";
+            context.lineWidth = 3;
+            context.setLineDash([7, 4]);
+            context.stroke();
+            context.setLineDash([]);
+        }
+
+        function updateMetrics() {
+            const allValues = runs.flatMap(samplesOf);
+            const last = runs.length ? samplesOf(runs[runs.length - 1]) : [];
+            document.getElementById("runCount").textContent = `${runs.length} kayıt`;
+            document.getElementById("averageMetric").textContent = allValues.length
+                ? (allValues.reduce((sum, value) => sum + value, 0) / allValues.length).toFixed(2)
+                : "—";
+            document.getElementById("rangeMetric").textContent = last.length
+                ? `${Math.min(...last)} / ${Math.max(...last)}`
+                : "—";
+
+            const previousComparableRuns = runs.slice(0, -1).filter(run =>
+                intervalOf(run) === intervalOf(runs[runs.length - 1])
+            );
+            const comparableCount = previousComparableRuns.reduce(
+                (count, run) => Math.min(count, samplesOf(run).length),
+                last.length
+            );
+            if (previousComparableRuns.length > 0 && comparableCount > 0) {
+                let difference = 0;
+                for (let index = 0; index < comparableCount; index++) {
+                    const profile = median(previousComparableRuns
+                        .map(run => samplesOf(run)[index])
+                        .filter(Number.isFinite));
+                    difference += Math.abs(last[index] - profile);
+                }
+                document.getElementById("deviationMetric").textContent =
+                    (difference / comparableCount).toFixed(2);
+            } else {
+                document.getElementById("deviationMetric").textContent = "—";
+            }
+        }
+
+        function renderRuns() {
+            const container = document.getElementById("runs");
+            container.replaceChildren();
+            if (!runs.length) {
+                const empty = document.createElement("p");
+                empty.className = "empty";
+                empty.textContent = "Bu hatta ait kayıt bulunmuyor.";
+                container.append(empty);
+            } else {
+                runs.slice().reverse().forEach((run, index) => {
+                    const row = document.createElement("div");
+                    row.className = "run";
+                    const label = document.createElement("span");
+                    const marker = document.createElement("span");
+                    marker.setAttribute("aria-hidden", "true");
+                    marker.style.cssText = `display:inline-block;width:10px;height:10px;margin-right:8px;border-radius:50%;background:${runColors[(runs.length - index - 1) % runColors.length]}`;
+                    label.append(marker, document.createTextNode(
+                        `Çalıştırma ${runs.length - index} · ${samplesOf(run).length} örnek · ${run.intervalSeconds ?? "?"} sn aralık`
+                    ));
+                    const id = document.createElement("span");
+                    id.textContent = String(run.runId || "").slice(-8);
+                    row.append(label, id);
+                    container.append(row);
+                });
+            }
+            updateMetrics();
+            resizeCanvas();
+        }
+
+        function updateDeviceStatus() {
+            const element = document.getElementById("deviceStatus");
+            const status = deviceState;
+            if (!status || !status.state) {
+                element.textContent = "Cihaz durumu henüz bildirilmedi.";
+            } else {
+                const sampleText = Number.isInteger(status.sampleCount) && status.sampleCount > 0
+                    ? ` · ${status.sampleCount} örnek`
+                    : "";
+                element.textContent = `${status.message || status.state}${sampleText}`;
+            }
+            const active = status && ["queued", "running", "uploading"].includes(status.state);
+            startButton.disabled = Boolean(active);
+            deleteButton.disabled = Boolean(active);
+        }
+
+        async function loadData(showUpdated = false) {
+            try {
+                const data = await requestJson(
+                    `/api/calibration?line=${encodeURIComponent(lineInput.value)}`
+                );
+                runs = Object.entries(data.runs || {})
+                    .map(([runId, run]) => ({ ...run, runId }))
+                    .filter(run => validSamples(run.samples))
+                    .sort((a, b) => a.runId.localeCompare(b.runId));
+                deviceState = data.status;
+                updateDeviceStatus();
+                renderRuns();
+                if (showUpdated) {
+                    showStatus("Kalibrasyon verileri yenilendi.", "success");
+                }
+            } catch (error) {
+                console.error("Kalibrasyon verileri okunamadı:", error);
+                showStatus(`Veriler okunamadı: ${error.message}`, "error");
+            }
+        }
+
+        form.addEventListener("submit", async event => {
+            event.preventDefault();
+            const durationMinutes = Number(document.getElementById("duration").value);
+            const intervalSeconds = Number(document.getElementById("interval").value);
+            const sampleCount = Math.min(
+                Math.floor(durationMinutes * 60 / intervalSeconds),
+                300
+            );
+            if (!Number.isInteger(durationMinutes) || !Number.isInteger(intervalSeconds) ||
+                sampleCount < 1) {
+                showStatus("Süre, en az bir örnek aralığı kadar olmalıdır.", "error");
+                return;
+            }
+
+            startButton.disabled = true;
+            try {
+                const result = await requestJson("/api/calibration", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        line: Number(lineInput.value),
+                        durationMinutes,
+                        intervalSeconds
+                    })
+                });
+                showStatus(`İstek gönderildi. Tahmini örnek sayısı: ${result.sampleCount}. Cihazın tüm hatları kapalı olması gerekir.`, "success");
+                await loadData();
+            } catch (error) {
+                showStatus(`Kalibrasyon başlatılamadı: ${error.message}`, "error");
+            } finally {
+                updateDeviceStatus();
+            }
+        });
+
+        deleteButton.addEventListener("click", async () => {
+            const line = lineInput.value;
+            if (!confirm(`Hat ${line} için kayıtlı tüm kalibrasyon verileri silinsin mi?`)) return;
+
+            deleteButton.disabled = true;
+            try {
+                await requestJson(`/api/calibration?line=${encodeURIComponent(line)}`, {
+                    method: "DELETE"
+                });
+                showStatus(`Hat ${line} kalibrasyon kayıtları silindi.`, "success");
+                await loadData();
+            } catch (error) {
+                showStatus(`Kayıtlar silinemedi: ${error.message}`, "error");
+            } finally {
+                updateDeviceStatus();
+            }
+        });
+
+        lineInput.addEventListener("change", () => loadData());
+        refreshButton.addEventListener("click", () => loadData(true));
+        window.addEventListener("resize", resizeCanvas);
+        loadData();
+        setInterval(() => loadData(), 5000);
+    </script>
+</body>
+</html>

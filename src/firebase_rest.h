@@ -17,6 +17,7 @@ public:
     int setString(const String& path, const String& value);
     int pushString(const String& path, const String& value);
     int setJson(const String& path, const String& json);
+    int pushJson(const String& path, const String& json, String& key);
 
 private:
     String _baseUrl;
